@@ -13880,6 +13880,38 @@ def alias_model_entries(data, aliases):
     return data + extra
 
 
+def advertise_unified_models(data, unified, realm):
+    """Append client-facing unified names next to their per-exit target.
+
+    Parallel to alias_model_entries(): only advertise a name when this exit
+    actually serves its target, so the client never sees a name that fails on
+    the first call. Does not mutate ``data``.
+    """
+    if not unified or not isinstance(data, list):
+        return data
+    realm_key = str(realm or "").strip().lower()
+    by_id = {}
+    for item in data:
+        if isinstance(item, dict) and item.get("id"):
+            by_id.setdefault(str(item["id"]), item)
+    seen = set(by_id)
+    extra = []
+    for name, mapping in unified.items():
+        target = (mapping or {}).get(realm_key)
+        if not target or name in seen:
+            continue
+        source = by_id.get(str(target))
+        if source is None:
+            continue
+        entry = dict(source)
+        entry["id"] = name
+        if source.get("name"):
+            entry["name"] = name
+        extra.append(entry)
+        seen.add(name)
+    return data + extra
+
+
 def model_entry(mid, meta, realm=None):
     """Build a rich /v1/models entry from the desktop app catalog metadata.
     The OpenAI spec only names id/object/created/owned_by, so capability data is
@@ -24309,6 +24341,16 @@ class Handler(BaseHTTPRequestHandler):
         # alias_model_entries): clients that discover the catalogue must be
         # able to see the name they are expected to send.
         data = alias_model_entries(data, aliases)
+        # Advertise unified names next to their per-exit target, the same way
+        # operator aliases are advertised: a client that discovers the
+        # catalogue must see the single name it is expected to send.
+        try:
+            unified = wb_settings.effective_unified_models(ACCOUNTS_DIR)
+        except Exception:
+            unified = {}
+        if unified:
+            data = advertise_unified_models(
+                data, unified, req_realm or CURRENT_REALM)
         payload = {"object": "list", "data": data,
                    "realm": req_realm or CURRENT_REALM}
         # 来源说明（面板展示用）：这批清单是上游 API 实时取的，还是读的
@@ -30039,6 +30081,15 @@ class Handler(BaseHTTPRequestHandler):
         t_start = time.time()
         explicit_realm = self._request_realm()
         req_realm = explicit_realm or CURRENT_REALM
+        # Unified model (off by default): resolve the client-facing name into
+        # this exit's real id *after* the realm is known but before any
+        # key/banned/disabled check, so a model closed on another exit cannot
+        # leak here. _client_model still holds the original for key checks.
+        try:
+            payload["model"] = wb_settings.resolve_unified_model(
+                payload.get("model"), req_realm, ACCOUNTS_DIR)
+        except Exception:
+            pass
         if req_realm == "codearts":
             blocked = self._banned_model_error(payload.get("model")) or self._key_model_error(payload.get("model"))
             if blocked:
