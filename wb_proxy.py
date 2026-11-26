@@ -87,6 +87,7 @@ import wb_pool_scope
 import wb_pool_text
 import wb_pricing
 import wb_usage_io
+import wb_keyquota
 from wb_usage_board import UsageBoard
 import wb_settings
 import wb_webprompts
@@ -1904,6 +1905,27 @@ def record_usage(model, usage, stream=None, elapsed_ms=None, ttft_ms=None, gen_m
     except Exception:
         pass
     return row
+
+
+def key_credit_exhausted(key_entry, key_id):
+    """这个 API Key 的累计积分额度是否已经用完。
+
+    返回 (exhausted, used, limit)。limit <= 0 视为不限，永远 False。
+    「用完」= 已记账积分 >= 上限，与日 token 限量同一口径：不预判本次成本，
+    因此最后一单可能略微超额（积分只有请求结束才知道）。
+    """
+    try:
+        limit = float((key_entry or {}).get("credit_limit") or 0)
+    except (TypeError, ValueError):
+        limit = 0.0
+    if limit <= 0:
+        return False, 0.0, 0.0
+    try:
+        used = wb_keyquota.used(USAGE_DIR, key_id)
+    except Exception as exc:
+        log("credit quota check failed: %s" % (exc,))
+        return False, 0.0, limit
+    return round(used, 8) >= limit, used, limit
 
 
 def record_upstream_usage(upstream, requested_model, usage, **kwargs):
@@ -12849,6 +12871,10 @@ def runtime_settings_view():
             # daily_token_limit 只存不显会让面板把日限量画成 0，用户以为没设过，
             # 再保存一次就把真实值写回 0（与 #592 同类的坑）。
             "daily_token_limit": int(entry.get("daily_token_limit") or 0),
+            # credit_limit 同理：累计积分额度（0 = 不限）。顺带回一个已用量，
+            # 面板才能显示「已用 / 上限」，否则每次都画成 0 让人以为没设过。
+            "credit_limit": float(entry.get("credit_limit") or 0),
+            "credit_used": round(wb_keyquota.used(USAGE_DIR, entry.get("id") or ""), 2),
             # concurrency_limit 上游只存不显：面板读不到就显示 0，用户以为没设过，
             # 再保存一次又把真实值写回 0。
             "concurrency_limit": int(entry.get("concurrency_limit") or 0),
@@ -25972,15 +25998,15 @@ class Handler(BaseHTTPRequestHandler):
         if not allowed_now:
             return self._rate_limited(MediaRateLimited(wait))
 
-        if not acquire_media_slot():
-            return self._error(
-                503, "media slots busy (%d in flight); retry shortly" % MEDIA_SLOTS,
-                "server_error")
         cost_hint = media_image_cost_hint(prepared["model"]["id"])
         spend_ok, spend_why = media_key_spend_allow(
             self._key_id(), cost_hint, int(config.get("daily_credits_per_key") or 0))
         if not spend_ok:
             return self._media_error(wb_media.MediaError("NO_CREDIT", spend_why))
+        if not acquire_media_slot():
+            return self._error(
+                503, "media slots busy (%d in flight); retry shortly" % MEDIA_SLOTS,
+                "server_error")
         excluded = set()
         tried = 0
         try:
@@ -26552,6 +26578,13 @@ class Handler(BaseHTTPRequestHandler):
                     daily_token_limit = max(0, int(daily_token_limit or 0))
                 except (TypeError, ValueError):
                     daily_token_limit = 0
+                # 累计积分额度（积分，允许小数）。与上面同一规则：请求体没带就
+                # 沿用已存值，老面板保存不会把用户的额度清成 0（不限）。
+                if "credit_limit" in item:
+                    credit_limit = item.get("credit_limit")
+                else:
+                    credit_limit = stored.get("credit_limit")
+                credit_limit = wb_settings.clean_credit_limit(credit_limit)
                 created_at = item.get("created_at") or (stored.get("created_at") if entry_id in existing else None) or wb_time.strftime("%Y/%m/%d %H:%M")
                 cleaned.append({
                     "id": entry_id,
@@ -26562,6 +26595,7 @@ class Handler(BaseHTTPRequestHandler):
                     "accounts": accounts,
                     "concurrency_limit": concurrency_limit,
                     "daily_token_limit": daily_token_limit,
+                    "credit_limit": credit_limit,
                     "enabled": enabled,
                     "created_at": created_at,
                 })
@@ -30212,6 +30246,22 @@ class Handler(BaseHTTPRequestHandler):
             payload = self._payload_or_error(allow_list=(path == "/accounts/import"))
         if payload is None:
             return
+        if not is_account_route:
+            # 每 Key 累计积分额度（0/缺省 = 不限）。同样放在并发槽位之前：
+            # 已经烧完的 Key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
+            # 已用积分由 wb_keyquota 从 usage.jsonl 增量合计。
+            _credit_hit, _credit_used, _credit_limit = key_credit_exhausted(
+                self.key_entry, self._key_id())
+            if _credit_hit:
+                key_name = (self.key_entry or {}).get("name") or self._key_id() or "当前 Key"
+                message = ("Credit quota exhausted for API key '%s' (%.2f of %g credits used); "
+                           "raise the limit for this key in the panel to continue"
+                           % (key_name, _credit_used, _credit_limit))
+                record_error(payload.get("model") or "unknown", 403, message,
+                             stream=payload.get("stream"), key=self._key_id())
+                if is_messages_route:
+                    return self._anthropic_error(403, message, "permission_error")
+                return self._error(403, message, "permission_error")
         if not is_account_route and not is_media_route and not is_audio_route:
             if self._maybe_web_model(payload, is_messages_route):
                 return

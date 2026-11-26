@@ -274,7 +274,7 @@ python tests/run_all.py            # 全部套件
 python tests/run_all.py realm      # 只跑名字里含 realm 的
 ```
 
-- 318 个套件：240 个 Python + 78 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
+- 319 个套件：241 个 Python + 78 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
 - `tests/_mobile_check.py` 是独立的 Playwright 手机/桌面布局检查器（需自行安装 Playwright），按需手动运行，不在上面的套件集里。
 - `tests/_visual_recent.py` 是同一类手动检查器：用合成 fixture 起一份 1480 宽的「请求列表」，验证失败徽章点开的详情弹窗、四个过滤下拉真的把参数发到 `/usage/recent`，并把列表 / 弹窗 / 筛选条截图写到系统临时目录的 `wb-visual-recent/`。
 - CI（`.github/workflows/tests.yml`）跑同一条命令：Ubuntu 上 python 3.9 与 3.12（3.9 是本项目声称的最低版本），Windows 上 python 3.12；推送 `v*` tag 时额外断言 **tag == 源码版本**（`-ci` 演练 tag 豁免）。
@@ -282,6 +282,11 @@ python tests/run_all.py realm      # 只跑名字里含 realm 的
 ---
 
 ## 七、版本更新记录 (Changelog)
+
+### Unreleased
+
+- **每 Key 累计积分额度（`credit_limit`，默认 0 = 不限）**：API Key 新增一个「这个 Key 一共能用多少积分」的上限，按 `usage.jsonl` 每行的 `credit` 折叠到 Key id，累计用满即拒绝派发（`403 permission_error`，chat / Responses / Anthropic Messages / 音频 / 生图 / 生视频同一口径），把上限调大立刻恢复。口径与 `daily_token_limit` 一致：判定放在并发槽位之前，不预判本次成本，因此正在处理的请求仍可能让积分超额；统计出错时放行而不是挡死。面板 Key 编辑弹窗新增「积分总额度」输入与「按剩余额度填」勾选（保存时换算成 `已用 + 剩余`），Key 卡片显示 `积分 已用 / 上限 · 剩 X`。行为默认关闭（0 = 不限），老安装不变；新增 `WB_KEY_CREDIT_TOTALS=0` 可整体关掉统计。
+- **Per-key cumulative credit quota (`credit_limit`, default 0 = unlimited)**: an API key can carry a total credit budget. `credit` from each `usage.jsonl` row is folded by key id; once the accumulated total reaches the cap the gateway refuses to dispatch (`403 permission_error`, same rule for chat, Responses, Anthropic Messages, audio, images and videos), and raising the cap restores service immediately. Same semantics as `daily_token_limit` — checked before the concurrency slot, no pre-estimate of the current request (in-flight requests may overshoot the cap), and a failure in the accounting code fails open. The panel gains a "total credit quota" input plus a "enter the remaining allowance" checkbox (converted to `used + remaining` on save) and a `credits used / cap · left` badge. Off by default (0 = unlimited), so existing installs are unaffected; `WB_KEY_CREDIT_TOTALS=0` disables the accounting entirely.
 
 本版更新请查看 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**。
 
