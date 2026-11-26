@@ -25377,6 +25377,18 @@ class Handler(BaseHTTPRequestHandler):
             b'data-ui-language="__WB_UI_LANGUAGE__"',
             ('data-ui-language="%s"' % language).encode("utf-8"),
         )
+        # Same idea for the global exit pills: inject the persisted realm so the
+        # very first paint shows the real exit instead of the static "国际版"
+        # placeholder (which made the pill visibly flip a moment later, once
+        # /realm resolved on the client).
+        realm_label = {"codearts": "CodeArts", "cn": "国内版"}.get(
+            CURRENT_REALM, "国际版")
+        if realm_label != "国际版":
+            for _sid in ("headerRealmName", "nextRealmName"):
+                body = body.replace(
+                    ('<span id="%s">国际版</span>' % _sid).encode("utf-8"),
+                    ('<span id="%s">%s</span>' % (_sid, realm_label)).encode("utf-8"),
+                )
         # 面板首页是纯静态资源（服务端逐字节原样发出、不含任何机密），所以可以
         # 允许浏览器存储副本、每次打开再回源校验：校验命中回 304（无 body），
         # 省下整页（约 470KB）的重复下载，手机 / Tailscale 远程访问体感最明显。
@@ -25393,7 +25405,7 @@ class Handler(BaseHTTPRequestHandler):
             st = os.stat(DASHBOARD_HTML)
             # 强校验符（不带 W/ 前缀）：响应是「文件字节 + 本次语言」的精确副本，
             # tag 变 ⇔ 字节变。
-            etag = '"%x-%x-%s"' % (st.st_mtime_ns, st.st_size, language)
+            etag = '"%x-%x-%s-%s"' % (st.st_mtime_ns, st.st_size, language, CURRENT_REALM)
         except Exception:
             # stat 取不到（或时间戳无法表示）不是致命错误：退化为一律按普通
             # 200 处理，只是这一次没有条件请求支持，绝不让面板页本身打不开。

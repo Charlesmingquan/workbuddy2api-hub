@@ -756,6 +756,50 @@ a:hover{text-decoration:underline}
 
 /* 顶部右侧区域与主题切换组件 (黑白单色、极简线条Outline、符合规范) */
 .header-right{display:flex;align-items:center;gap:10px}
+
+/* === HEADER GLOBAL EXIT PILL STYLES (all layouts) === */
+#headerRealmPill{position:relative;display:inline-flex;flex:0 0 auto}
+#headerRealmPill .next-realm-toggle{
+  appearance:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;
+  padding:5px 12px;border:1px solid var(--border, var(--line, #d8d5cd))!important;
+  border-radius:999px!important;
+  background:var(--panel, #fff)!important;color:var(--text, var(--fg, #1f1e1b))!important;
+  font:inherit;font-size:11px;font-weight:650;line-height:1.2;
+  cursor:pointer;white-space:nowrap;box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06))!important;
+  transition:all .15s ease;
+}
+#headerRealmPill .next-realm-toggle:hover{
+  border-color:var(--line-hover, var(--border, #b9b5aa))!important;
+  background:var(--panel2, #f7f6f3)!important;
+  box-shadow:var(--shadow-md, 0 4px 12px rgba(0,0,0,.10))!important;
+}
+#headerRealmPill .next-status-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--ok,var(--accent));flex:0 0 auto;
+}
+#headerRealmPill .next-realm-toggle svg{width:12px;height:12px;opacity:.6}
+#headerRealmPill .next-realm-menu{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:180px;
+  display:flex;flex-direction:column;gap:2px;padding:6px;
+  border:1px solid var(--border);border-radius:10px;background:var(--panel);
+  box-shadow:var(--shadow-md,0 8px 24px rgba(0,0,0,.2));
+}
+#headerRealmPill .next-realm-menu[hidden]{display:none!important}
+#headerRealmPill .next-realm-menu button{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--text);
+  font:inherit;font-size:12px;text-align:left;cursor:pointer;
+}
+#headerRealmPill .next-realm-menu button:hover{background:var(--panel2)}
+#headerRealmPill .next-realm-menu button[aria-checked="true"]{
+  background:var(--accent-soft,var(--panel2));color:var(--accent);font-weight:650;
+}
+#headerRealmPill .next-realm-menu button[hidden]{display:none!important}
+#headerRealmPill .next-realm-menu small{color:var(--dim);font-size:10px}
+@media (max-width:640px){#headerRealmPill .next-realm-toggle small{display:none}}
+/* === END HEADER GLOBAL EXIT PILL STYLES === */
+/* In the "next" console layout the topbar already hosts #nextRealmPill; hide
+   the shared header pill there to avoid two exit switchers side by side. */
+html[data-ui="next"] #headerRealmPill{display:none!important}
 .theme-dropdown-wrap{position:relative;display:inline-flex}
 .theme-btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -6178,6 +6222,8 @@ html[data-ui="next"] #nextRealmPill .next-realm-menu small{
   font-size:9.5px;
   font-weight:500;
 }
+
+
 html[data-ui="next"] #nextRealmPill.next-realm-muted .next-realm-toggle{
   border-color:var(--border);
   background:var(--surface);
@@ -8829,6 +8875,26 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
   html[data-ui="next"] #pageAnalytics .kpis{grid-template-columns:minmax(0,1fr)!important}
 }
 </style>
+<style id="realm-pill-capsule-force">
+/* Force a visible capsule outline on the global exit switchers, in every layout.
+   Uses literal fallbacks so it works even when theme vars are absent. */
+#headerRealmPill .next-realm-toggle,
+#nextRealmPill .next-realm-toggle{
+  border:1px solid var(--line, #d5cfbc) !important;
+  border-radius:999px !important;
+  background:var(--panel, #ffffff) !important;
+  color:var(--fg, #1f1e1b) !important;
+  box-shadow:0 1px 2px rgba(0,0,0,.06) !important;
+  padding:5px 12px !important;
+  min-height:32px !important;
+}
+#headerRealmPill .next-realm-toggle:hover,
+#nextRealmPill .next-realm-toggle:hover{
+  border-color:var(--line-hover, #c5bfab) !important;
+  background:var(--panel2, #f4f2ea) !important;
+  box-shadow:0 4px 12px rgba(0,0,0,.10) !important;
+}
+</style>
 </head>
 <body>
 <header>
@@ -8860,6 +8926,8 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
     </button>
   </div>
   <div class="header-right">
+    <!-- 全局实际出口选择器（传统布局 / 控制台布局共用，所有页面常驻） -->
+    <div id="headerRealmPill" class="next-realm-picker header-realm-picker" data-header-realm-picker><button type="button" id="headerRealmToggle" class="next-realm-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="headerRealmMenu" title="切换网关实际出口"><span class="next-status-dot"></span><span id="headerRealmName">国际版</span><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5 5 5-5"/></svg></button><div id="headerRealmMenu" class="next-realm-menu" role="menu" aria-label="选择网关实际出口" hidden><button type="button" role="menuitemradio" data-realm="intl"><span>国际版</span><small>Global</small></button><button type="button" role="menuitemradio" data-realm="cn"><span>国内版</span><small>China</small></button><button type="button" role="menuitemradio" data-realm="codearts" data-header-realm-codearts><span>CodeArts</span><small>华为云</small></button></div></div>
     <button type="button" class="lang-btn" id="langToggleBtn" onclick="toggleLang(event)" data-no-i18n title="切换语言 (简体中文 / 正體中文 / English)" aria-label="切换语言">
       <span id="langToggleLabel">EN</span>
     </button>
@@ -9174,9 +9242,14 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
         <span id="activeGatewayName" style="font-size:20px;font-weight:700;color:var(--accent);letter-spacing:-.4px">国际版 (Global)</span>
       </div>
       <div style="margin-top:auto">
-        <button class="toggle-realm-btn" id="btnToggleRealm" onclick="toggleActiveGatewayRealm()" style="cursor:pointer;width:100%;padding:7px 12px;font-size:12px">
-          ⇄ 切换默认出口为【国内版】
-        </button>
+        <!-- 直接选，不再「⇄ 切到下一个」：三个出口时轮转要点两次才到 CodeArts。
+             选项由 syncRealmPicker() 按 /realm 返回的 options 生成（CodeArts 没
+             配置时只有两项），原生 select 会被上面的自定义下拉接管成主题样式。 -->
+        <select id="realmPicker" style="width:100%" aria-label="网关默认出口"
+                onchange="setActiveGatewayRealm(this.value)">
+          <option value="intl">国际版</option>
+          <option value="cn">国内版</option>
+        </select>
       </div>
     </div>
 
@@ -12447,6 +12520,56 @@ async function switchViewRealm(r){
 function realmLabel(r){
   return r === "intl" ? "国际版" : (r === "cn" ? "国内版" : "CodeArts");
 }
+
+async function setActiveGatewayRealm(realm){
+  const options = window.REALM_OPTIONS || ["intl", "cn"];
+  const cur = window.ACTIVE_GATEWAY_REALM || "intl";
+  if(!realm || realm === cur || options.indexOf(realm) < 0){
+    syncRealmPicker();
+    return;
+  }
+  try {
+    const res = await postJSON("/realm", {realm: realm});
+    window.ACTIVE_GATEWAY_REALM = res.current || realm;
+    toast("网关默认上游已切换并永久保存为: " + realmLabel(window.ACTIVE_GATEWAY_REALM));
+    setViewRealm(window.ACTIVE_GATEWAY_REALM);
+    window.updateUI();
+    if(window.ACTIVE_GATEWAY_REALM === "codearts"){
+      await Promise.all([loadCodeartsOverview(true), loadModels(),
+                         loadAnalytics(), refresh()]);
+    }else{
+      await Promise.all([loadAccounts(), loadModels(), loadGrowthTasks(),
+                         loadSchedulerStatus(), loadAnalytics(), refresh()]);
+    }
+  }catch(e){
+    alert("切换失败: " + e.message);
+    syncRealmPicker();
+  }
+};
+
+/* 下拉的选项与选中项。选项集只在 CodeArts 启用/停用后变化，所以按 data-options
+   比对，变了才重建 innerHTML——每轮 updateUI 都重写会把自定义下拉的面板一起
+   重建，还会让 i18n 多走一遍整棵树。 */
+function syncRealmPicker(){
+  const sel = document.getElementById("realmPicker");
+  if(!sel) return;
+  const options = (window.REALM_OPTIONS && window.REALM_OPTIONS.length)
+    ? window.REALM_OPTIONS : ["intl", "cn"];
+  const want = options.join(",");
+  if(sel.getAttribute("data-options") !== want){
+    sel.setAttribute("data-options", want);
+    sel.innerHTML = options.map(function(r){
+      return '<option value="' + r + '">' + realmLabel(r) + "</option>";
+    }).join("");
+    /* 新长出来的 <option> 是中文原文：非简体界面要再走一次 i18n，否则切过语言
+       之后重建的这一项（通常是 CodeArts）会停在中文。 */
+    if(window.WB_I18N && window.WB_I18N.current && window.WB_I18N.current() !== "zh"){
+      window.WB_I18N.apply();
+    }
+  }
+  sel.value = window.ACTIVE_GATEWAY_REALM || "intl";
+};
+
 
 async function toggleActiveGatewayRealm(){
   const options = window.REALM_OPTIONS || ["intl", "cn"];
@@ -28661,7 +28784,10 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function nextRealmLabel(){
-    var realm = window.VIEW_REALM || 'intl';
+    // Keep the global exit pill in sync with the persisted gateway exit, not the
+    // per-page view: the model-catalogue realm switch only changes VIEW_REALM and
+    // must not make the header claim the gateway exit changed (issue: 2026-11-26).
+    var realm = window.ACTIVE_GATEWAY_REALM || 'intl';
     if(realm === 'codearts') return 'CodeArts';
     if(realm === 'cn') return '国内版';
     return '国际版';
@@ -28751,6 +28877,8 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
     if(moreBtn) moreBtn.classList.toggle('active', MORE_TABS.indexOf(tab) >= 0);
 
     var realm = nextRealmLabel();
+    // The header pill reflects the persisted gateway exit, but the model-catalogue
+    // realm switch below is a view filter and must keep highlighting VIEW_REALM.
     var realmKey = window.VIEW_REALM || 'intl';
     var realmName = document.getElementById('nextRealmName');
     if(realmName) realmName.textContent = realm;
@@ -29147,7 +29275,7 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function realmKey(){
-    return window.VIEW_REALM || 'intl';
+    return window.ACTIVE_GATEWAY_REALM || 'intl';
   }
 
   function syncNextMeta(){
@@ -29320,8 +29448,11 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
       syncPicker();
       return;
     }
-    if(typeof window.switchViewRealm === 'function'){
-      var result = window.switchViewRealm(realm);
+    // This pill represents the persisted gateway exit: clicking must switch the
+    // real exit (setActiveGatewayRealm), not just the per-page view. View-only
+    // switching stays on the model-catalogue / accounts page realm buttons.
+    if(typeof window.setActiveGatewayRealm === 'function'){
+      var result = window.setActiveGatewayRealm(realm);
       if(result && typeof result.then === 'function'){
         result.then(scheduleDecorate, scheduleDecorate);
       }
@@ -30918,6 +31049,81 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 })();
 /* === NEXT-UI REFACTOR V2 RUNTIME END === */
+
+/* === HEADER GLOBAL EXIT PILL (all layouts) === */
+(function(){
+  function labels(r){ return r === 'codearts' ? 'CodeArts' : r === 'cn' ? '国内版' : '国际版'; }
+  function activeRealm(){ return (window.ACTIVE_GATEWAY_REALM || 'intl'); }
+  function pill(){ return document.getElementById('headerRealmPill'); }
+  function opts(){ var o = window.REALM_OPTIONS || ['intl','cn']; return o; }
+  function sync(){
+    var p = pill(); if(!p) return;
+    var want = labels(activeRealm());
+    var name = document.getElementById('headerRealmName');
+    if(name && name.textContent !== want) name.textContent = want;
+    var menu = document.getElementById('headerRealmMenu');
+    if(menu){
+      Array.prototype.forEach.call(menu.querySelectorAll('[data-realm]'), function(item){
+        var r = item.getAttribute('data-realm');
+        item.hidden = opts().indexOf(r) < 0;
+        var on = r === activeRealm();
+        item.setAttribute('aria-checked', on ? 'true' : 'false');
+        item.classList.toggle('active', on);
+      });
+    }
+  }
+  function bind(){
+    var p = pill(); if(!p || p.getAttribute('data-hdr-bound') === '1') return;
+    p.setAttribute('data-hdr-bound','1');
+    var toggle = document.getElementById('headerRealmToggle');
+    var menu = document.getElementById('headerRealmMenu');
+    if(toggle && menu){
+      toggle.addEventListener('click', function(e){
+        e.stopPropagation(); menu.hidden = !menu.hidden;
+        toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+        sync();
+      });
+      menu.addEventListener('click', function(e){
+        var item = e.target && e.target.closest ? e.target.closest('[data-realm]') : null;
+        if(!item) return;
+        var r = item.getAttribute('data-realm');
+        menu.hidden = true; toggle.setAttribute('aria-expanded','false');
+        if(r === activeRealm() || opts().indexOf(r) < 0){ sync(); return; }
+        if(typeof window.setActiveGatewayRealm === 'function') window.setActiveGatewayRealm(r);
+      });
+      document.addEventListener('click', function(e){ if(!p.contains(e.target)){ menu.hidden = true; toggle.setAttribute('aria-expanded','false'); } });
+    }
+    sync();
+  }
+  function init(){ bind(); sync(); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  // The real exit arrives asynchronously (initRealm -> GET /realm). updateUI()
+  // runs right after that resolves and after every realm switch, so hook it for
+  // instant sync instead of waiting for a poll (that lag made the pill show the
+  // stale value for ~2s in legacy/console layouts).
+  if(typeof window.updateUI === 'function' && !window.__hdrPillHooked){
+    window.__hdrPillHooked = true;
+    var _origUpdateUI = window.updateUI;
+    window.updateUI = function(){
+      var out = _origUpdateUI.apply(this, arguments);
+      try { sync(); } catch(e){}
+      return out;
+    };
+  }
+  window.addEventListener('load', sync);
+  window.addEventListener('pageshow', sync);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) sync(); });
+  // Cheap fallback poll; sync() only touches the DOM when the label changed.
+  var pillTimer = setInterval(sync, 300);
+  // Node DOM-sandbox tests run this inline script with real timers; an
+  // unref'd interval must not keep their process alive (they assert, then
+  // exit). Browsers have no unref(), so polling stays normal there.
+  if (pillTimer && typeof pillTimer.unref === 'function') pillTimer.unref();
+  window.__syncHeaderRealmPill = sync;
+})();
+/* === END HEADER GLOBAL EXIT PILL === */
 </script>
 </body>
 </html>
