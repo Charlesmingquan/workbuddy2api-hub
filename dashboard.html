@@ -8829,6 +8829,33 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
   html[data-ui="next"] #pageAnalytics .kpis{grid-template-columns:minmax(0,1fr)!important}
 }
 </style>
+<style id="settings-cat-v2">
+/* Account table: columns size to their content instead of pinned widths. */
+table.account-cards{
+  table-layout:auto !important;
+  min-width:0 !important;
+  width:100% !important;
+}
+table.account-cards th:nth-child(3){width:auto !important}
+table.account-cards td.acct-actions,
+table.account-cards th:last-child{
+  min-width:0 !important;
+  width:auto !important;
+  white-space:normal !important;
+}
+table.account-cards .acct-actions-col{min-width:0 !important}
+table.account-cards .acct-actions-row{flex-wrap:wrap !important}
+
+/* Settings: traditional layout shows the category bar at the top; hide the
+   next-layout group row (styles exist only under data-ui=next). */
+html:not([data-ui="next"]) #nextSettingsGroups{display:none!important}
+/* Hug the sticky header without a 14px gutter; trim the bar height. */
+html:not([data-ui="next"]) .settings-cat-bar{
+  top: var(--settings-cat-top, 56px) !important;
+  padding: 6px 0 8px !important;
+  margin-bottom: 10px !important;
+}
+</style>
 </head>
 <body>
 <header>
@@ -10068,7 +10095,17 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
       <input type="search" id="settingsSearch" placeholder="搜索全部分组" aria-controls="settingsSearchResults" autocomplete="off">
       <div id="settingsSearchResults" class="settings-search-results" hidden></div>
     </div>
-        <div class="next-settings-groups" id="nextSettingsGroups">
+            <!-- 二级分类胶囊导航 -->
+    <div id="settingsCatBar" class="settings-cat-bar">
+      <button type="button" class="settings-cat-btn active" data-cat="all" onclick="filterSettingsCategory('all')">全部 <span class="cat-count">38</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="access" onclick="filterSettingsCategory('access')">🔑 访问与密钥 <span class="cat-count">6</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="models" onclick="filterSettingsCategory('models')">🤖 模型与调度 <span class="cat-count">11</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="limits" onclick="filterSettingsCategory('limits')">🛡️ 限额与并发 <span class="cat-count">4</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="network" onclick="filterSettingsCategory('network')">🌐 出口与网络 <span class="cat-count">8</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="tasks" onclick="filterSettingsCategory('tasks')">⏰ 自动化 <span class="cat-count">3</span></button>
+      <button type="button" class="settings-cat-btn" data-cat="system" onclick="filterSettingsCategory('system')">🛠️ 计费与运维 <span class="cat-count">6</span></button>
+    </div>
+<div class="next-settings-groups" id="nextSettingsGroups">
       <button type="button" class="next-settings-group active" data-settings-group="basic" data-tone="basic" aria-pressed="true" onclick="nextSettingsGroup('basic', this)"><span class="next-settings-group-dot" aria-hidden="true"></span><span class="next-settings-group-label">常规与安全</span><span class="next-settings-group-count">6</span></button>
       <button type="button" class="next-settings-group" data-settings-group="api" data-tone="api" aria-pressed="false" onclick="nextSettingsGroup('api', this)"><span class="next-settings-group-dot" aria-hidden="true"></span><span class="next-settings-group-label">密钥与接入</span><span class="next-settings-group-count">4</span></button>
       <button type="button" class="next-settings-group" data-settings-group="network" data-tone="network" aria-pressed="false" onclick="nextSettingsGroup('network', this)"><span class="next-settings-group-dot" aria-hidden="true"></span><span class="next-settings-group-label">网络与伪装</span><span class="next-settings-group-count">6</span></button>
@@ -10084,16 +10121,6 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
     <div style="margin-bottom:16px">
       <h2 style="margin:0;font-size:17px;color:var(--fg);font-family:var(--serif);font-weight:600;letter-spacing:.02em">网关设置</h2>
       <div style="font-size:12px;color:var(--dim);margin-top:4px">面板密码与界面语言、API Key 与出口绑定、代理槽与限额、价格估算、出站身份与本地网络工具。</div>
-    </div>
-    <!-- 二级分类胶囊导航 -->
-    <div id="settingsCatBar" class="settings-cat-bar">
-      <button type="button" class="settings-cat-btn active" data-cat="all" onclick="filterSettingsCategory('all')">全部 <span class="cat-count">38</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="access" onclick="filterSettingsCategory('access')">🔑 访问与密钥 <span class="cat-count">6</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="models" onclick="filterSettingsCategory('models')">🤖 模型与调度 <span class="cat-count">11</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="limits" onclick="filterSettingsCategory('limits')">🛡️ 限额与并发 <span class="cat-count">4</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="network" onclick="filterSettingsCategory('network')">🌐 出口与网络 <span class="cat-count">8</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="tasks" onclick="filterSettingsCategory('tasks')">⏰ 自动化 <span class="cat-count">3</span></button>
-      <button type="button" class="settings-cat-btn" data-cat="system" onclick="filterSettingsCategory('system')">🛠️ 计费与运维 <span class="cat-count">6</span></button>
     </div>
 
     <!-- 左侧导航由 initPageNav() 扫描本页的 section 自动生成，
@@ -19522,6 +19549,10 @@ function syncPageNavOffset(){
   const narrow = window.matchMedia('(max-width:860px)').matches;
   const top = (header ? header.offsetHeight : 64) + (narrow ? 0 : 14);
   document.documentElement.style.setProperty(PAGE_NAV_TOP_VAR, top + 'px');
+  // Settings category bar hugs the sticky header (no 14px gutter), so header and
+  // bar read as one continuous strip while scrolling.
+  document.documentElement.style.setProperty('--settings-cat-top',
+    (header ? header.offsetHeight : 56) + 'px');
 }
 
 function setActivePageNav(page, id){
@@ -19616,6 +19647,15 @@ function togglePageNavCollapse(page){
   applyPageNavCollapse(page, collapsed);
 }
 
+var SETTINGS_CAT_META = {
+  all:     { title: '全部设置',   desc: '面板内所有设置分组，可按分组查看或直接搜索。' },
+  access:  { title: '访问与密钥', desc: '模型调用 Key、CodeArts、账号限额与网页工具网关。' },
+  models:  { title: '模型与调度', desc: '价格估算、别名、协议适配、模型过滤与调度路由。' },
+  limits:  { title: '限额与并发', desc: '额度探针、退避、暂停保护、超时与并发控制。' },
+  network: { title: '出口与网络', desc: 'TLS、代理槽、出站身份、设备 Token 与桌面兼容头。' },
+  tasks:   { title: '自动化',     desc: '每日签到、活跃任务、随机调度与签到窗口。' },
+  system:  { title: '计费与运维', desc: '用量聚合、日志、时区、更新与运行信息。' }
+};
 let CURRENT_SETTINGS_CAT = 'all';
 
 function filterSettingsCategory(cat){
@@ -19626,6 +19666,14 @@ function filterSettingsCategory(cat){
   document.querySelectorAll('.settings-cat-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.cat === CURRENT_SETTINGS_CAT);
   });
+
+  // 1b. Keep the group description block in sync with the selected category,
+  //     reusing the new layout's group wording.
+  var __catMeta = SETTINGS_CAT_META[CURRENT_SETTINGS_CAT] || SETTINGS_CAT_META.all;
+  var __catTitle = document.getElementById('nextSettingsTitle');
+  var __catDesc = document.getElementById('nextSettingsDesc');
+  if(__catTitle) __catTitle.textContent = __catMeta.title;
+  if(__catDesc) __catDesc.textContent = __catMeta.desc;
 
   // 2. Filter sections inside #pageSettings
   const page = document.getElementById('pageSettings');
