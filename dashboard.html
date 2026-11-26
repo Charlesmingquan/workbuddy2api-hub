@@ -759,6 +759,38 @@ a:hover{text-decoration:underline}
 
 /* 顶部右侧区域与主题切换组件 (黑白单色、极简线条Outline、符合规范) */
 .header-right{display:flex;align-items:center;gap:10px}
+/* === HEADER GLOBAL EXIT PILL STYLES (all layouts) === */
+#headerRealmPill{position:relative;display:inline-flex;flex:0 0 auto}
+#headerRealmPill .next-realm-toggle{
+  appearance:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;
+  padding:5px 10px;border:1px solid var(--border);border-radius:999px;
+  background:var(--panel);color:var(--text);font:inherit;font-size:10.5px;font-weight:650;
+  cursor:pointer;white-space:nowrap;
+}
+#headerRealmPill .next-status-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--ok,var(--accent));flex:0 0 auto;
+}
+#headerRealmPill .next-realm-toggle svg{width:12px;height:12px;opacity:.6}
+#headerRealmPill .next-realm-menu{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:180px;
+  display:flex;flex-direction:column;gap:2px;padding:6px;
+  border:1px solid var(--border);border-radius:10px;background:var(--panel);
+  box-shadow:var(--shadow-md,0 8px 24px rgba(0,0,0,.2));
+}
+#headerRealmPill .next-realm-menu[hidden]{display:none!important}
+#headerRealmPill .next-realm-menu button{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--text);
+  font:inherit;font-size:12px;text-align:left;cursor:pointer;
+}
+#headerRealmPill .next-realm-menu button:hover{background:var(--panel2)}
+#headerRealmPill .next-realm-menu button[aria-checked="true"]{
+  background:var(--accent-soft,var(--panel2));color:var(--accent);font-weight:650;
+}
+#headerRealmPill .next-realm-menu button[hidden]{display:none!important}
+#headerRealmPill .next-realm-menu small{color:var(--dim);font-size:10px}
+@media (max-width:640px){#headerRealmPill .next-realm-toggle small{display:none}}
+/* === END HEADER GLOBAL EXIT PILL STYLES === */
 .theme-dropdown-wrap{position:relative;display:inline-flex}
 .theme-btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -8821,6 +8853,8 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
     </button>
   </div>
   <div class="header-right">
+    <!-- 全局实际出口选择器（传统布局 / 控制台布局共用，所有页面常驻） -->
+    <div id="headerRealmPill" class="next-realm-picker header-realm-picker" data-header-realm-picker><button type="button" id="headerRealmToggle" class="next-realm-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="headerRealmMenu" title="切换网关实际出口"><span class="next-status-dot"></span><span id="headerRealmName">国际版</span><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5 5 5-5"/></svg></button><div id="headerRealmMenu" class="next-realm-menu" role="menu" aria-label="选择网关实际出口" hidden><button type="button" role="menuitemradio" data-realm="intl"><span>国际版</span><small>Global</small></button><button type="button" role="menuitemradio" data-realm="cn"><span>国内版</span><small>China</small></button><button type="button" role="menuitemradio" data-realm="codearts" data-header-realm-codearts><span>CodeArts</span><small>华为云</small></button></div></div>
     <button type="button" class="lang-btn" id="langToggleBtn" onclick="toggleLang(event)" data-no-i18n title="切换语言 (简体中文 / 正體中文 / English)" aria-label="切换语言">
       <span id="langToggleLabel">EN</span>
     </button>
@@ -28477,7 +28511,7 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function nextRealmLabel(){
-    var realm = window.VIEW_REALM || 'intl';
+    var realm = window.ACTIVE_GATEWAY_REALM || 'intl';
     if(realm === 'codearts') return 'CodeArts';
     if(realm === 'cn') return '国内版';
     return '国际版';
@@ -28963,7 +28997,7 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function realmKey(){
-    return window.VIEW_REALM || 'intl';
+    return window.ACTIVE_GATEWAY_REALM || 'intl';
   }
 
   function syncNextMeta(){
@@ -29136,8 +29170,8 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
       syncPicker();
       return;
     }
-    if(typeof window.switchViewRealm === 'function'){
-      var result = window.switchViewRealm(realm);
+    if(typeof window.setActiveGatewayRealm === 'function'){
+      var result = window.setActiveGatewayRealm(realm);
       if(result && typeof result.then === 'function'){
         result.then(scheduleDecorate, scheduleDecorate);
       }
@@ -30734,6 +30768,58 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 })();
 /* === NEXT-UI REFACTOR V2 RUNTIME END === */
+/* === HEADER GLOBAL EXIT PILL (all layouts) === */
+(function(){
+  function labels(r){ return r === 'codearts' ? 'CodeArts' : r === 'cn' ? '国内版' : '国际版'; }
+  function activeRealm(){ return (window.ACTIVE_GATEWAY_REALM || 'intl'); }
+  function pill(){ return document.getElementById('headerRealmPill'); }
+  function opts(){ var o = window.REALM_OPTIONS || ['intl','cn']; return o; }
+  function sync(){
+    var p = pill(); if(!p) return;
+    var name = document.getElementById('headerRealmName');
+    if(name) name.textContent = labels(activeRealm());
+    var menu = document.getElementById('headerRealmMenu');
+    if(menu){
+      Array.prototype.forEach.call(menu.querySelectorAll('[data-realm]'), function(item){
+        var r = item.getAttribute('data-realm');
+        item.hidden = opts().indexOf(r) < 0;
+        var on = r === activeRealm();
+        item.setAttribute('aria-checked', on ? 'true' : 'false');
+        item.classList.toggle('active', on);
+      });
+    }
+  }
+  function bind(){
+    var p = pill(); if(!p || p.getAttribute('data-hdr-bound') === '1') return;
+    p.setAttribute('data-hdr-bound','1');
+    var toggle = document.getElementById('headerRealmToggle');
+    var menu = document.getElementById('headerRealmMenu');
+    if(toggle && menu){
+      toggle.addEventListener('click', function(e){
+        e.stopPropagation(); menu.hidden = !menu.hidden;
+        toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+        sync();
+      });
+      menu.addEventListener('click', function(e){
+        var item = e.target && e.target.closest ? e.target.closest('[data-realm]') : null;
+        if(!item) return;
+        var r = item.getAttribute('data-realm');
+        menu.hidden = true; toggle.setAttribute('aria-expanded','false');
+        if(r === activeRealm() || opts().indexOf(r) < 0){ sync(); return; }
+        if(typeof window.setActiveGatewayRealm === 'function') window.setActiveGatewayRealm(r);
+      });
+      document.addEventListener('click', function(e){ if(!p.contains(e.target)){ menu.hidden = true; toggle.setAttribute('aria-expanded','false'); } });
+    }
+    sync();
+  }
+  function init(){ bind(); sync(); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+  // 出口可能被别处切换（设置页下拉、/realm 刷新），定时对齐显示
+  setInterval(sync, 1500);
+  window.__syncHeaderRealmPill = sync;
+})();
+/* === END HEADER GLOBAL EXIT PILL === */
 </script>
 </body>
 </html>
