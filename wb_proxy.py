@@ -74,6 +74,7 @@ import wb_activity
 import wb_audio
 import wb_atrest
 import wb_catalog
+import wb_client_aliases
 import wb_codearts
 import wb_egress
 import wb_ipintel
@@ -1207,9 +1208,103 @@ def client_facing_model(handler, model):
     sent sees a mismatch. Falling back to `model` keeps every un-aliased request
     byte-identical. Module-level so the streaming helpers and the tests that
     drive them with a stub handler can call it too.
+
+    The ``claude-*`` prefix table is the exception: it is not an operator alias
+    the client knows about, it is the only name a Claude client *can* send.
+    Echoing it back would make the user believe Claude answered; ``model`` (the
+    real id) is what the request actually ran on, so that is echoed instead.
     """
+    if str(getattr(handler, "_claude_alias", "") or "").strip():
+        return model
     original = str(getattr(handler, "_client_model", "") or "").strip()
     return original or model
+
+
+def claude_alias_table():
+    """The ``claude-*`` prefix table in force, or ``{}`` when switched off."""
+    try:
+        return wb_settings.effective_claude_aliases(ACCOUNTS_DIR)
+    except Exception:
+        return {}
+
+
+def effort_alias_table():
+    """The effort alias table in force, or ``{}`` when switched off."""
+    try:
+        return wb_settings.effective_effort_aliases(ACCOUNTS_DIR)
+    except Exception:
+        return {}
+
+
+def _supported_efforts(model):
+    """The levels the catalog declares for `model` (empty when unknown)."""
+    try:
+        return model_reasoning_meta(model).get("supportedEfforts") or []
+    except Exception:
+        return []
+
+
+def _apply_claude_model_alias(handler, payload):
+    """Resolve a Claude Desktop ``claude-*`` model name to a real upstream id.
+
+    Claude's "third-party inference" panel only accepts ids shaped like
+    ``claude-*`` and the upstream serves none of them (``claude-sonnet-5`` ->
+    ``400 / 11102``), so the client could not be pointed here at all. The
+    prefix table (settings -> env -> built-in; see ``wb_client_aliases``)
+    resolves the request. Nothing is mapped when the table is empty, so an
+    operator can switch this off and keep the old behaviour byte-for-byte.
+    """
+    table = claude_alias_table()
+    if not table or not isinstance(payload, dict):
+        return ""
+    before, after = wb_client_aliases.apply_claude_alias(payload, table)
+    if not before:
+        return ""
+    try:
+        handler._claude_alias = after
+    except Exception:
+        pass
+    log("alias: claude model %s -> %s" % (before, after))
+    return after
+
+
+def _normalize_effort_in_body(payload, model, handler=None):
+    """Rewrite effort aliases (``xhigh`` / ``ultra``) to a level the model runs.
+
+    Runs before ``map_reasoning_effort`` reads the value: that function rewrites
+    anything the catalog does not declare to the *model default*, which for
+    ``deepseek-v4.1-flash`` is ``high`` - i.e. a client asking for its top level
+    would silently get less thinking than the middle of the range. A model that
+    does publish the level keeps it (``deepseek-v4-pro`` publishes ``xhigh``).
+
+    Logged as ``effort_from`` / ``effort_to`` so "what did the upstream actually
+    receive" is answerable from the log alone (the handoff for this change asked
+    for exactly that).
+    """
+    if not isinstance(payload, dict):
+        return ""
+    table = effort_alias_table()
+    if not table:
+        return ""
+    before, after = wb_client_aliases.normalize_effort(
+        payload, model, table, _supported_efforts(model))
+    if not before:
+        return ""
+    key = "-"
+    if handler is not None:
+        try:
+            key = key_label(handler._key_id()) or "-"
+        except Exception:
+            key = "-"
+    log("effort: model=%s effort_from=%s effort_to=%s key=%s"
+        % (model, before, after, key))
+    return after
+
+
+def _normalize_client_effort(handler, payload):
+    """Request-handler wrapper: normalise the client's effort alias in place."""
+    model = str(payload.get("model") or "") if isinstance(payload, dict) else ""
+    return _normalize_effort_in_body(payload, model, handler)
 
 
 # The WorkBuddy AI desktop app caches its account product config here on every
@@ -12835,6 +12930,12 @@ def runtime_settings_view():
         "model_aliases_enabled": wb_settings.model_aliases_enabled(ACCOUNTS_DIR),
         "unified_models": wb_settings.unified_models(ACCOUNTS_DIR),
         "unified_models_enabled": wb_settings.unified_models_enabled(ACCOUNTS_DIR),
+        # 客户端直连用的两张表：claude-* 前缀映射、推理档位别名。返回生效值
+        # （环境变量与内置默认已合并），面板只需展示与覆盖。
+        "claude_aliases": wb_settings.effective_claude_aliases(ACCOUNTS_DIR),
+        "claude_aliases_enabled": wb_settings.claude_aliases_enabled(ACCOUNTS_DIR),
+        "effort_aliases": wb_settings.effective_effort_aliases(ACCOUNTS_DIR),
+        "effort_aliases_enabled": wb_settings.effort_aliases_enabled(ACCOUNTS_DIR),
         "filter_models_by_key": wb_settings.filter_models_by_key(ACCOUNTS_DIR),
         "reasoning_effort_map": wb_settings.reasoning_effort_map(ACCOUNTS_DIR),
         "models_only_available": wb_settings.models_only_available(ACCOUNTS_DIR),
@@ -17042,9 +17143,17 @@ def build_starved_retry_body(body, floor=0):
 
 def build_upstream_body(payload):
     model = payload.get("model") or ""
-    # Map an unsupported level before anything below reads the effort, so the
-    # thinking backfill and the logged level describe what will actually run.
-    payload = map_reasoning_effort(dict(payload), model)
+    # Two rewrites before anything below reads the effort, in this order:
+    #   1. the client's alias for "more than the picker allows" (xhigh/ultra)
+    #      becomes the level this build actually runs at;
+    #   2. an unsupported level becomes the catalog default.
+    # Reversing them would let step 2 turn xhigh into the model default (high)
+    # before step 1 ever sees it. Bodies built in-process (probes, agent config,
+    # sub-bridge) never pass the request handler, so the normalisation happens
+    # here as well; it is idempotent, so an already-rewritten request is a no-op.
+    payload = dict(payload)
+    _normalize_effort_in_body(payload, model)
+    payload = map_reasoning_effort(payload, model)
     # Resolve the effective thinking state before the backfill below: while
     # thinking is on, the upstream requires reasoning_content on every
     # assistant message, whether or not the client kept a reasoning trace.
@@ -26735,6 +26844,34 @@ class Handler(BaseHTTPRequestHandler):
                                    "invalid_request_error")
             wb_settings.set_unified_models_enabled(ACCOUNTS_DIR, raw)
             reply["unified_models_enabled"] = raw
+        if "claude_aliases" in payload:
+            try:
+                cleaned = wb_settings.set_claude_aliases(
+                    ACCOUNTS_DIR, payload.get("claude_aliases"))
+            except ValueError as exc:
+                return self._error(400, str(exc), "invalid_request_error")
+            reply["claude_aliases"] = cleaned
+        if "claude_aliases_enabled" in payload:
+            raw = payload.get("claude_aliases_enabled")
+            if not isinstance(raw, bool):
+                return self._error(400, "claude_aliases_enabled must be true or false",
+                                   "invalid_request_error")
+            wb_settings.set_claude_aliases_enabled(ACCOUNTS_DIR, raw)
+            reply["claude_aliases_enabled"] = raw
+        if "effort_aliases" in payload:
+            try:
+                cleaned = wb_settings.set_effort_aliases(
+                    ACCOUNTS_DIR, payload.get("effort_aliases"))
+            except ValueError as exc:
+                return self._error(400, str(exc), "invalid_request_error")
+            reply["effort_aliases"] = cleaned
+        if "effort_aliases_enabled" in payload:
+            raw = payload.get("effort_aliases_enabled")
+            if not isinstance(raw, bool):
+                return self._error(400, "effort_aliases_enabled must be true or false",
+                                   "invalid_request_error")
+            wb_settings.set_effort_aliases_enabled(ACCOUNTS_DIR, raw)
+            reply["effort_aliases_enabled"] = raw
         if "filter_models_by_key" in payload:
             raw = payload.get("filter_models_by_key")
             if not isinstance(raw, bool):
@@ -29234,6 +29371,8 @@ class Handler(BaseHTTPRequestHandler):
         all_tools.extend(additional_tools_from_input(payload))
         custom_names = custom_tool_names(all_tools)
         chat_req = responses_to_chat(payload, compaction=compaction)
+        if req_realm != 'codearts':
+            _normalize_client_effort(self, chat_req)
         ns_map = chat_req.pop("_namespace_map", None)
         # Echo these back on the response object; see chat_to_response.
         request_meta = {
@@ -29625,6 +29764,8 @@ class Handler(BaseHTTPRequestHandler):
             chat_req = messages_to_chat(payload)
         except ValueError as exc:
             return self._anthropic_error(400, str(exc), "invalid_request_error")
+        if req_realm != 'codearts':
+            _normalize_client_effort(self, chat_req)
         model = chat_req.get("model") or "unknown"
         want_stream = bool(chat_req.get("stream"))
         session_key = extract_session_key(self.headers, chat_req)
@@ -30137,12 +30278,16 @@ class Handler(BaseHTTPRequestHandler):
             self._client_model = str(payload.get("model") or "")
         except Exception:
             self._client_model = ""
+        self._claude_alias = ""
         try:
             aliases = wb_settings.effective_model_aliases(ACCOUNTS_DIR)
         except Exception:
             aliases = {}
         _apply_model_aliases(payload, aliases)
         _apply_background_model_alias(payload)
+        # Claude Desktop 只能填 claude-* 形式的模型 ID，上游一个都不认：先按前缀
+        # 表解析成真实 id（回程仍回显真实 id）。推理档位在路由解析最终模型后归一化。
+        _apply_claude_model_alias(self, payload)
         # 日 token 限量（单位 M，0/缺省 = 不限）。放在并发槽位之前判断：
         # 已经被限的 key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
         # 用量来自 _daily_usage 的 keytokens 视图（默认 15s 缓存）。
@@ -30235,7 +30380,6 @@ class Handler(BaseHTTPRequestHandler):
         # Only the knobs that change behaviour are logged - never message text.
         session_key = extract_session_key(self.headers, payload)
         want_stream = bool(payload.get("stream"))
-        model = payload.get("model") or "hy4-preview"
         t_start = time.time()
         explicit_realm = self._request_realm()
         req_realm = explicit_realm or CURRENT_REALM
@@ -30244,6 +30388,7 @@ class Handler(BaseHTTPRequestHandler):
         # key/banned/disabled check, so a model closed on another exit cannot
         # leak here. _client_model still holds the original for key checks.
         resolve_unified_model_in_payload(payload, req_realm)
+        model = payload.get("model") or "hy4-preview"
         if req_realm == "codearts":
             blocked = self._banned_model_error(payload.get("model")) or self._key_model_error(payload.get("model"))
             if blocked:
@@ -30251,6 +30396,7 @@ class Handler(BaseHTTPRequestHandler):
             # CodeArts 不走 WorkBuddy 的 build_upstream_body / 账号池：请求体、
             # 超时、错误映射都由 wb_codearts 负责，回程复用下面的处理器。
             return self._handle_codearts_chat(payload, session_key, req_realm)
+        _normalize_client_effort(self, payload)
         forwarded = build_upstream_body(payload)
         given = client_effort_of(payload) or payload.get("reasoning") \
             or payload.get("thinking") or payload.get("enable_thinking")
