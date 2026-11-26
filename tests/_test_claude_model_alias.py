@@ -104,7 +104,11 @@ class TableTests(unittest.TestCase):
                                "claude-x": ""})
         self.assertEqual(table, {})
 
-    def test_settings_switch_is_on_by_default_and_gates_the_table(self):
+    def test_settings_switch_requires_opt_in_and_gates_the_table(self):
+        with mock.patch.dict(os.environ, {"WB_CLAUDE_ALIASES_ENABLED": ""}):
+            self.assertFalse(S.claude_aliases_enabled(self.dir))
+        with mock.patch.dict(os.environ, {"WB_CLAUDE_ALIASES_ENABLED": "1"}):
+            self.assertTrue(S.claude_aliases_enabled(self.dir))
         S.set_claude_aliases_enabled(self.dir, True)
         self.assertTrue(S.claude_aliases_enabled(self.dir))
         S.set_claude_aliases(self.dir, {"claude-sonnet": "glm-5.3"})
@@ -286,9 +290,9 @@ class OutboundTests(unittest.TestCase):
             seen.update(body)
             return _Response()
 
-        with _no_env(), mock.patch.object(A, "urlopen", side_effect=urlopen):
-            # Same order as do_POST: the claude prefix table runs at ingress,
-            # before the body is built and priced.
+        with _no_env(), mock.patch.dict(os.environ, {"WB_EFFORT_ALIASES_ENABLED": "1"}), \
+                mock.patch.object(A, "urlopen", side_effect=urlopen):
+            # Resolve the incoming name before the outbound body is built.
             P._apply_claude_model_alias(handler, payload)
             P._normalize_client_effort(handler, payload)
             response, _account, _effort = P.open_upstream(

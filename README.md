@@ -20,7 +20,7 @@
 This project is for protocol research and personal use only. Prefer the official client, do not use your primary account, and do not resell or share access.
 
 <p align="center">
-  <a href="https://github.com/niyouqianma/workbuddy2api-hub/releases"><img src="https://img.shields.io/badge/Release-v2.2.4-2496ED?style=flat-square" alt="Version 2.2.4"></a>
+  <a href="https://github.com/niyouqianma/workbuddy2api-hub/releases"><img src="https://img.shields.io/badge/Release-v2.2.5-2496ED?style=flat-square" alt="Version 2.2.5"></a>
   <img src="https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/API-OpenAI_Compatible-412991?style=flat-square" alt="OpenAI API">
   <img src="https://img.shields.io/badge/Dual_Realm-Intl_&_CN-0DBD8B?style=flat-square" alt="Dual Realm">
@@ -228,6 +228,7 @@ Claude 桌面版的「第三方推理」只接受 `claude-*` 形式的模型 ID�
 | `WB_USAGE_ROTATE_BYTES` | `8388608` | 用量日志的轮转阈值（字节，默认 8 MiB）。`0` 停止新轮转。备份和降级见 [用量目录说明](usage/README.txt) |
 | `WB_CHAT_SLOT_WAIT` | `30` | 并发槽位的等待秒数：全局对话槽位与 Key 级 `concurrency_limit` 共用这个预算，等到才有名额，超时仍按 429 拒绝 |
 | `WB_ENABLE_ANTHROPIC_MESSAGES` | `0` | 是否开启实验性 Anthropic Messages 协议转换 |
+| `WB_CLAUDE_ALIASES_ENABLED` / `WB_EFFORT_ALIASES_ENABLED` | `0` | 按需设为 `1` 开启 Claude 前缀映射 / 推理档位归一化 |
 | `WB_CLAUDE_ALIASES` | 内置表 | `claude-*` 前缀映射整表替换（`prefix=target` 或 JSON 对象），`off` 关闭。默认 `claude-opus*=deepseek-v4-pro`、`claude-sonnet*` / `claude-haiku*=deepseek-v4.1-flash` |
 | `CLAUDE_ALIAS_OPUS` / `CLAUDE_ALIAS_SONNET` / `CLAUDE_ALIAS_HAIKU` | 内置表 | 只覆盖某一族的映射目标，其余沿用默认 |
 | `WB_EFFORT_ALIASES` | `xhigh:max,ultra:max` | 推理档位别名表；客户端发来的档位模型不支持时改写成目标档位，`off` 关闭（逐字节透传） |

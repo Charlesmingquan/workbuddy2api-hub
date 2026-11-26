@@ -13019,7 +13019,7 @@ def runtime_settings_view():
         "accounts_dir": ACCOUNTS_DIR,
         "usage_dir": USAGE_DIR,
         "settings_file": wb_settings.settings_path(ACCOUNTS_DIR),
-        "version": "2.2.4",
+        "version": "2.2.5",
     }
 def current_account():
     """Account used for display purposes (health / usage summaries)."""
@@ -23099,7 +23099,7 @@ class Handler(BaseHTTPRequestHandler):
             super().finish()
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass
-    server_version = "wb-proxy/2.2.4"
+    server_version = "wb-proxy/2.2.5"
     def log_message(self, fmt, *args):
         # 静默过滤前端看板高频定时心跳的正常 200 GET 请求（/logs、/usage、/accounts 轮询等）
         # 避免自增死循环刷屏与日志污染。遇 4xx/5xx 异常或所有非 GET 业务操作依然如实记录。
@@ -29337,6 +29337,8 @@ class Handler(BaseHTTPRequestHandler):
         all_tools.extend(additional_tools_from_input(payload))
         custom_names = custom_tool_names(all_tools)
         chat_req = responses_to_chat(payload, compaction=compaction)
+        if req_realm != 'codearts':
+            _normalize_client_effort(self, chat_req)
         ns_map = chat_req.pop("_namespace_map", None)
         # Echo these back on the response object; see chat_to_response.
         request_meta = {
@@ -29728,6 +29730,8 @@ class Handler(BaseHTTPRequestHandler):
             chat_req = messages_to_chat(payload)
         except ValueError as exc:
             return self._anthropic_error(400, str(exc), "invalid_request_error")
+        if req_realm != 'codearts':
+            _normalize_client_effort(self, chat_req)
         model = chat_req.get("model") or "unknown"
         want_stream = bool(chat_req.get("stream"))
         session_key = extract_session_key(self.headers, chat_req)
@@ -30232,11 +30236,8 @@ class Handler(BaseHTTPRequestHandler):
         _apply_model_aliases(payload, aliases)
         _apply_background_model_alias(payload)
         # Claude Desktop 只能填 claude-* 形式的模型 ID，上游一个都不认：先按前缀
-        # 表解析成真实 id（回程仍回显真实 id）；再把客户端自造的推理档位
-        # （xhigh / ultra）归一化成该模型真正接受的档位。两步都在模型校验之前，
-        # 所以出口检查、Key 白名单、日志看到的都是最终要发出去的那个名字。
+        # 表解析成真实 id（回程仍回显真实 id）。推理档位在路由解析最终模型后归一化。
         _apply_claude_model_alias(self, payload)
-        _normalize_client_effort(self, payload)
         # 日 token 限量（单位 M，0/缺省 = 不限）。放在并发槽位之前判断：
         # 已经被限的 key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
         # 用量来自 _daily_usage 的 keytokens 视图（默认 15s 缓存）。
@@ -30329,7 +30330,6 @@ class Handler(BaseHTTPRequestHandler):
         # Only the knobs that change behaviour are logged - never message text.
         session_key = extract_session_key(self.headers, payload)
         want_stream = bool(payload.get("stream"))
-        model = payload.get("model") or "hy4-preview"
         t_start = time.time()
         explicit_realm = self._request_realm()
         req_realm = explicit_realm or CURRENT_REALM
@@ -30338,6 +30338,7 @@ class Handler(BaseHTTPRequestHandler):
         # key/banned/disabled check, so a model closed on another exit cannot
         # leak here. _client_model still holds the original for key checks.
         resolve_unified_model_in_payload(payload, req_realm)
+        model = payload.get("model") or "hy4-preview"
         if req_realm == "codearts":
             blocked = self._banned_model_error(payload.get("model")) or self._key_model_error(payload.get("model"))
             if blocked:
@@ -30345,6 +30346,7 @@ class Handler(BaseHTTPRequestHandler):
             # CodeArts 不走 WorkBuddy 的 build_upstream_body / 账号池：请求体、
             # 超时、错误映射都由 wb_codearts 负责，回程复用下面的处理器。
             return self._handle_codearts_chat(payload, session_key, req_realm)
+        _normalize_client_effort(self, payload)
         forwarded = build_upstream_body(payload)
         given = client_effort_of(payload) or payload.get("reasoning") \
             or payload.get("thinking") or payload.get("enable_thinking")

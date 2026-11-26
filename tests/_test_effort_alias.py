@@ -88,8 +88,11 @@ class TableTests(unittest.TestCase):
         self.assertEqual(table["xhigh"], "high")
         self.assertEqual(table["ultra"], "max")
 
-    def test_settings_switch_is_on_by_default(self):
-        self.assertTrue(S.effort_aliases_enabled(self.dir))
+    def test_settings_switch_requires_opt_in(self):
+        with mock.patch.dict(os.environ, {"WB_EFFORT_ALIASES_ENABLED": ""}):
+            self.assertFalse(S.effort_aliases_enabled(self.dir))
+        with mock.patch.dict(os.environ, {"WB_EFFORT_ALIASES_ENABLED": "1"}):
+            self.assertTrue(S.effort_aliases_enabled(self.dir))
         S.set_effort_aliases_enabled(self.dir, False)
         self.assertEqual(S.effective_effort_aliases(self.dir), {})
         S.set_effort_aliases_enabled(self.dir, True)

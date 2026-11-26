@@ -1,9 +1,14 @@
 ## Unreleased
 
-- **Claude 桌面版直连**：新增 `claude-*` 模型名前缀映射（`claude-opus*` → `deepseek-v4-pro`，`claude-sonnet*` / `claude-haiku*` → `deepseek-v4.1-flash`），覆盖 `/v1/messages`、`/v1/messages/count_tokens`、`/v1/responses`、`/v1/chat/completions` 四条入口；回显真实模型 ID，未知模型仍返回 400，API Key 白名单同时认客户端名与解析后的名。映射表可用 `CLAUDE_ALIAS_OPUS/SONNET/HAIKU`、`WB_CLAUDE_ALIASES` 或设置里的 `claude_aliases` 覆盖，`off` 关闭。
-- **推理强度归一化**：客户端发来的 `xhigh` / `ultra` 归一化为上游的 `max`（Responses 的 `reasoning.effort` 与 Chat 的 `reasoning_effort` / `reasoningEffort` 都覆盖；模型自己声明该档位时保持原样，避免 `deepseek-v4-pro` 的 `xhigh` 被降级），Anthropic `thinking.budget_tokens` 的档位换算写在文档里；日志新增 `effort_from` / `effort_to`。表可用 `WB_EFFORT_ALIASES` 或设置里的 `effort_aliases` 覆盖，`off` 关闭。
+- **Claude 桌面版直连**：新增默认关闭的 `claude-*` 模型名前缀映射（`claude-opus*` → `deepseek-v4-pro`，`claude-sonnet*` / `claude-haiku*` → `deepseek-v4.1-flash`），覆盖 `/v1/messages`、`/v1/messages/count_tokens`、`/v1/responses`、`/v1/chat/completions` 四条入口；回显真实模型 ID，未知模型仍返回 400，API Key 白名单同时认客户端名与解析后的名。映射表可用 `CLAUDE_ALIAS_OPUS/SONNET/HAIKU`、`WB_CLAUDE_ALIASES` 或设置里的 `claude_aliases` 覆盖，`off` 关闭。
+- **推理强度归一化（默认关闭）**：客户端发来的 `xhigh` / `ultra` 归一化为上游的 `max`（Responses 的 `reasoning.effort` 与 Chat 的 `reasoning_effort` / `reasoningEffort` 都覆盖；模型自己声明该档位时保持原样，避免 `deepseek-v4-pro` 的 `xhigh` 被降级），Anthropic `thinking.budget_tokens` 的档位换算写在文档里；日志新增 `effort_from` / `effort_to`。表可用 `WB_EFFORT_ALIASES` 或设置里的 `effort_aliases` 覆盖，`off` 关闭。
 - 新增 `tests/_test_claude_model_alias.py`、`tests/_test_effort_alias.py` 与一键验收脚本 `scripts/acceptance_claude_effort.py`（假上游 + 真实网关链路，18 项断言）。文档见 [CLAUDE-DIRECT-AND-EFFORT.md](CLAUDE-DIRECT-AND-EFFORT.md)。
 - 全量测试：**318 个套件：240 个 Python + 78 个 JS**。
+
+## v2.2.5
+
+- **总览**恢复 v2.2.3 的卡片布局与最近请求筛选。点击「切换默认出口」即可切换并保存网关默认出口。
+- **账号页**恢复 v2.2.3 的筛选区、工具栏、列宽和桌面端两行操作按钮。手机端沿用卡片布局与批量操作折叠入口，「当前禁用」区恢复完整状态展示。
 
 ## v2.2.4
 

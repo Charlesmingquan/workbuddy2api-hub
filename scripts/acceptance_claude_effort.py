@@ -160,6 +160,8 @@ def main():
         "WB_PROXY_DEFAULT_REALM": "cn",
         "WB_CN_CHAT_UPSTREAM": "http://127.0.0.1:%d" % up_port,
         "WB_ENABLE_ANTHROPIC_MESSAGES": "1",
+        "WB_CLAUDE_ALIASES_ENABLED": "1",
+        "WB_EFFORT_ALIASES_ENABLED": "1",
         "WB_TLS_FINGERPRINT": "python",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUNBUFFERED": "1",

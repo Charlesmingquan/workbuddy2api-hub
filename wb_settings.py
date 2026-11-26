@@ -1595,6 +1595,13 @@ MAX_EFFORT_ALIASES = 32
 MAX_EFFORT_ALIAS_LEN = 32
 
 
+def _client_alias_enabled(accounts_dir, settings_key, env_key):
+    configured = load(accounts_dir).get(settings_key)
+    if isinstance(configured, bool):
+        return configured
+    return os.environ.get(env_key, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def claude_aliases(accounts_dir):
     """The stored ``claude-*`` prefix table (empty when the operator stored none)."""
     raw = load(accounts_dir).get(CLAUDE_ALIASES_KEY)
@@ -1602,14 +1609,9 @@ def claude_aliases(accounts_dir):
 
 
 def claude_aliases_enabled(accounts_dir):
-    """Whether ``claude-*`` names are mapped. A missing key reads as **on**.
-
-    Unlike the operator-only ``model_aliases`` table, this mapping cannot
-    shadow a real model id: every prefix starts with ``claude-``, which no
-    WorkBuddy exit serves. Leaving it on is what makes a stock Claude client
-    work without editing settings first.
-    """
-    return load(accounts_dir).get(CLAUDE_ALIASES_ENABLED_KEY) is not False
+    """Whether the operator opted into Claude prefix aliases."""
+    return _client_alias_enabled(
+        accounts_dir, CLAUDE_ALIASES_ENABLED_KEY, "WB_CLAUDE_ALIASES_ENABLED")
 
 
 def set_claude_aliases(accounts_dir, raw):
@@ -1669,15 +1671,9 @@ def effort_aliases(accounts_dir):
 
 
 def effort_aliases_enabled(accounts_dir):
-    """Whether effort aliases are applied. A missing key reads as **on**.
-
-    The shipped table only rewrites levels the addressed model does not
-    declare (``xhigh``/``ultra`` on ``deepseek-v4.1-flash``); a model that
-    publishes the level keeps the client's value (see
-    ``wb_client_aliases.normalize_effort``), so leaving it on cannot lower any
-    model's ceiling.
-    """
-    return load(accounts_dir).get(EFFORT_ALIASES_ENABLED_KEY) is not False
+    """Whether the operator opted into effort-level normalization."""
+    return _client_alias_enabled(
+        accounts_dir, EFFORT_ALIASES_ENABLED_KEY, "WB_EFFORT_ALIASES_ENABLED")
 
 
 def set_effort_aliases(accounts_dir, raw):

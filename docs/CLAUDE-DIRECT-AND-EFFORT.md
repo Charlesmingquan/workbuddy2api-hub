@@ -50,7 +50,7 @@ POST /v1/messages  {"model":"claude-sonnet-5", ...}
 
 ### 配置（优先级：settings.json > 环境变量 > 内置默认）
 
-环境变量，可只覆盖其中一项：
+默认关闭。设置 `WB_CLAUDE_ALIASES_ENABLED=1` 或 `claude_aliases_enabled: true` 开启；环境变量可只覆盖其中一项：
 
 ```bash
 CLAUDE_ALIAS_OPUS=deepseek-v4-pro
@@ -125,6 +125,8 @@ Claude 桌面端用 `thinking.budget_tokens >= 32000` 表达同一件事，网�
 改字段，它先被翻成档位（见下表），再走同一张归一化表。
 
 ### 配置（优先级同上）
+
+默认关闭。设置 `WB_EFFORT_ALIASES_ENABLED=1` 或 `effort_aliases_enabled: true` 开启。
 
 ```bash
 WB_EFFORT_ALIASES="xhigh:max,ultra:max"   # 或 JSON；整表替换
