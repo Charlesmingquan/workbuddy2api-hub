@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import wb_keyquota
 import wb_proxy
 import wb_settings
+import wb_usage_io
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -95,9 +96,23 @@ class KeyCreditTotals(unittest.TestCase):
     def test_rotation_rebuilds_from_scratch(self):
         write_rows(self.log, [{"key": "aaa", "credit": 9}])
         self.assertAlmostEqual(wb_keyquota.used(self.dir, "aaa"), 9.0)
-        os.remove(self.log)                            # 模拟轮转：文件被替换
-        write_rows(self.log, [{"key": "aaa", "credit": 0.25}])
+        replacement = self.log + ".replacement"
+        write_rows(replacement, [{"key": "aaa", "credit": 0.25}])
+        os.replace(replacement, self.log)
         self.assertAlmostEqual(wb_keyquota.used(self.dir, "aaa"), 0.25, places=6)
+
+    def test_sealed_segments_and_active_tail_share_an_offset(self):
+        write_rows(self.log, [{"key": "aaa", "credit": 3}])
+        self.assertTrue(wb_usage_io.rotate(self.log, 1))
+        write_rows(self.log, [{"key": "aaa", "credit": 4}], mode="a")
+        self.assertEqual(wb_keyquota.refresh(self.dir), {"aaa": 7.0})
+        self.assertTrue(wb_usage_io.rotate(self.log, 1))
+        with io.open(self.log, "a", encoding="utf-8") as fh:
+            fh.write('{"key": "aaa", "credit": 5}')
+        self.assertEqual(wb_keyquota.refresh(self.dir), {"aaa": 7.0})
+        with io.open(self.log, "a", encoding="utf-8") as fh:
+            fh.write('\n')
+        self.assertEqual(wb_keyquota.refresh(self.dir), {"aaa": 12.0})
 
     def test_env_switch_disables_accounting(self):
         write_rows(self.log, [{"key": "aaa", "credit": 5}])
@@ -116,6 +131,7 @@ class SettingsNormalization(unittest.TestCase):
             (0, 0.0),
             (-5, 0.0),
             ("bad", 0.0),
+            ("inf", 0.0),
             (1000, 1000.0),
             ("12.345", 12.35),
             (0.5, 0.5),
@@ -193,8 +209,11 @@ class Wiring(unittest.TestCase):
 
     def test_gate_called_on_every_dispatch_path(self):
         src = self._read("wb_proxy.py")
-        self.assertGreaterEqual(src.count("key_credit_exhausted("), 3,
-                                "chat + 生图 + 生视频 三条路径都要判定")
+        dispatch = src.split("    def do_POST(self):", 1)[1]
+        guard = dispatch.index("key_credit_exhausted(")
+        for next_step in ("self._maybe_web_model(", "self._handle_audio_post(",
+                          "self._handle_media_post(", "self._dispatch_chat_post("):
+            self.assertLess(guard, dispatch.index(next_step))
         self.assertIn('"credit_limit"', src)
         self.assertIn('"credit_used"', src)
         self.assertIn("wb_keyquota.used(", src)

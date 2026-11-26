@@ -11,6 +11,7 @@ import fnmatch
 import hashlib
 import hmac
 import json
+import math
 import os
 import random
 import re
@@ -598,15 +599,16 @@ def _clean_daily_token_limit(value):
         return 0
 
 
-def _clean_credit_limit(value):
+def clean_credit_limit(value):
     """每 Key 累计积分额度归一：正数 = 上限（积分，保留两位小数），0/脏值 = 不限。
 
     与 daily_token_limit 不同，这里单位是**积分**（上游按模型倍率实际扣的分数，
     见 usage.jsonl 的 credit 字段），所以允许小数——单次对话常常只扣 0.x 分。
     """
     try:
-        return max(0.0, round(float(value or 0), 2))
-    except (TypeError, ValueError):
+        number = float(value or 0)
+        return max(0.0, round(number, 2)) if math.isfinite(number) else 0.0
+    except (TypeError, ValueError, OverflowError):
         return 0.0
 
 
@@ -641,7 +643,7 @@ def _clean_key_entry(entry):
         "accounts": _clean_account_refs(entry.get("accounts")),
         "concurrency_limit": concurrency,
         "daily_token_limit": _clean_daily_token_limit(entry.get("daily_token_limit")),
-        "credit_limit": _clean_credit_limit(entry.get("credit_limit")),
+        "credit_limit": clean_credit_limit(entry.get("credit_limit")),
         "enabled": False if deleted_at else entry.get("enabled", True) is not False,
         "created_at": entry.get("created_at") or wb_time.strftime("%Y/%m/%d %H:%M"),
         "deleted_at": deleted_at,

@@ -1830,7 +1830,7 @@ def key_credit_exhausted(key_entry, key_id):
     except Exception as exc:
         log("credit quota check failed: %s" % (exc,))
         return False, 0.0, limit
-    return used >= limit, used, limit
+    return round(used, 8) >= limit, used, limit
 
 
 def record_upstream_usage(upstream, requested_model, usage, **kwargs):
@@ -12944,7 +12944,7 @@ def runtime_settings_view():
         "accounts_dir": ACCOUNTS_DIR,
         "usage_dir": USAGE_DIR,
         "settings_file": wb_settings.settings_path(ACCOUNTS_DIR),
-        "version": "2.2.4",
+        "version": "2.2.5",
     }
 def current_account():
     """Account used for display purposes (health / usage summaries)."""
@@ -23016,7 +23016,7 @@ class Handler(BaseHTTPRequestHandler):
             super().finish()
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass
-    server_version = "wb-proxy/2.2.4"
+    server_version = "wb-proxy/2.2.5"
     def log_message(self, fmt, *args):
         # 静默过滤前端看板高频定时心跳的正常 200 GET 请求（/logs、/usage、/accounts 轮询等）
         # 避免自增死循环刷屏与日志污染。遇 4xx/5xx 异常或所有非 GET 业务操作依然如实记录。
@@ -25889,22 +25889,15 @@ class Handler(BaseHTTPRequestHandler):
         if not allowed_now:
             return self._rate_limited(MediaRateLimited(wait))
 
-        if not acquire_media_slot():
-            return self._error(
-                503, "media slots busy (%d in flight); retry shortly" % MEDIA_SLOTS,
-                "server_error")
         cost_hint = media_image_cost_hint(prepared["model"]["id"])
-        _credit_hit, _credit_used, _credit_limit = key_credit_exhausted(
-            self.key_entry, self._key_id())
-        if _credit_hit:
-            return self._media_error(wb_media.MediaError(
-                "NO_CREDIT",
-                "本 Key 累计积分额度已用完（%.2f / %g）；请在看板提高该 Key 的积分上限"
-                % (_credit_used, _credit_limit)))
         spend_ok, spend_why = media_key_spend_allow(
             self._key_id(), cost_hint, int(config.get("daily_credits_per_key") or 0))
         if not spend_ok:
             return self._media_error(wb_media.MediaError("NO_CREDIT", spend_why))
+        if not acquire_media_slot():
+            return self._error(
+                503, "media slots busy (%d in flight); retry shortly" % MEDIA_SLOTS,
+                "server_error")
         excluded = set()
         tried = 0
         try:
@@ -26085,13 +26078,6 @@ class Handler(BaseHTTPRequestHandler):
         except wb_media.MediaError as exc:
             return self._media_error(exc)
 
-        _credit_hit, _credit_used, _credit_limit = key_credit_exhausted(
-            self.key_entry, self._key_id())
-        if _credit_hit:
-            return self._media_error(wb_media.MediaError(
-                "NO_CREDIT",
-                "本 Key 累计积分额度已用完（%.2f / %g）；请在看板提高该 Key 的积分上限"
-                % (_credit_used, _credit_limit)))
         spend_ok, spend_why = media_key_spend_allow(
             self._key_id(), cost_hint, int(config.get("daily_credits_per_key") or 0))
         if not spend_ok:
@@ -26489,10 +26475,7 @@ class Handler(BaseHTTPRequestHandler):
                     credit_limit = item.get("credit_limit")
                 else:
                     credit_limit = stored.get("credit_limit")
-                try:
-                    credit_limit = max(0.0, round(float(credit_limit or 0), 2))
-                except (TypeError, ValueError):
-                    credit_limit = 0.0
+                credit_limit = wb_settings.clean_credit_limit(credit_limit)
                 created_at = item.get("created_at") or (stored.get("created_at") if entry_id in existing else None) or wb_time.strftime("%Y/%m/%d %H:%M")
                 cleaned.append({
                     "id": entry_id,
@@ -30122,6 +30105,22 @@ class Handler(BaseHTTPRequestHandler):
             payload = self._payload_or_error(allow_list=(path == "/accounts/import"))
         if payload is None:
             return
+        if not is_account_route:
+            # 每 Key 累计积分额度（0/缺省 = 不限）。同样放在并发槽位之前：
+            # 已经烧完的 Key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
+            # 已用积分由 wb_keyquota 从 usage.jsonl 增量合计。
+            _credit_hit, _credit_used, _credit_limit = key_credit_exhausted(
+                self.key_entry, self._key_id())
+            if _credit_hit:
+                key_name = (self.key_entry or {}).get("name") or self._key_id() or "当前 Key"
+                message = ("Credit quota exhausted for API key '%s' (%.2f of %g credits used); "
+                           "raise the limit for this key in the panel to continue"
+                           % (key_name, _credit_used, _credit_limit))
+                record_error(payload.get("model") or "unknown", 403, message,
+                             stream=payload.get("stream"), key=self._key_id())
+                if is_messages_route:
+                    return self._anthropic_error(403, message, "permission_error")
+                return self._error(403, message, "permission_error")
         if not is_account_route and not is_media_route and not is_audio_route:
             if self._maybe_web_model(payload, is_messages_route):
                 return
@@ -30144,21 +30143,6 @@ class Handler(BaseHTTPRequestHandler):
             aliases = {}
         _apply_model_aliases(payload, aliases)
         _apply_background_model_alias(payload)
-        # 每 Key 累计积分额度（0/缺省 = 不限）。同样放在并发槽位之前：
-        # 已经烧完的 Key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
-        # 已用积分来自 usage.jsonl 按 key 折叠（wb_keyquota，默认 1s 缓存）。
-        _credit_hit, _credit_used, _credit_limit = key_credit_exhausted(
-            self.key_entry, self._key_id())
-        if _credit_hit:
-            key_name = (self.key_entry or {}).get("name") or self._key_id() or "当前 Key"
-            message = ("Credit quota exhausted for API key '%s' (%.2f of %g credits used); "
-                       "raise the limit for this key in the panel to continue"
-                       % (key_name, _credit_used, _credit_limit))
-            record_error(payload.get("model") or "unknown", 403, message,
-                         stream=payload.get("stream"), key=self._key_id())
-            if is_messages_route:
-                return self._anthropic_error(403, message, "permission_error")
-            return self._error(403, message, "permission_error")
         # 日 token 限量（单位 M，0/缺省 = 不限）。放在并发槽位之前判断：
         # 已经被限的 key 不该先排队等 WB_CHAT_SLOT_WAIT 秒再被拒。
         # 用量来自 _daily_usage 的 keytokens 视图（默认 15s 缓存）。
