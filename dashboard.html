@@ -757,49 +757,39 @@ a:hover{text-decoration:underline}
 /* 顶部右侧区域与主题切换组件 (黑白单色、极简线条Outline、符合规范) */
 .header-right{display:flex;align-items:center;gap:10px}
 
-/* === HEADER GLOBAL EXIT PILL STYLES (all layouts) === */
+/* The default gateway exit is separate from the panel's view selector. */
 #headerRealmPill{position:relative;display:inline-flex;flex:0 0 auto}
-#headerRealmPill .next-realm-toggle{
+#headerRealmToggle{
   appearance:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;
-  padding:5px 12px;border:1px solid var(--border, var(--line, #d8d5cd))!important;
-  border-radius:999px!important;
-  background:var(--panel, #fff)!important;color:var(--text, var(--fg, #1f1e1b))!important;
+  padding:5px 10px;border:1px solid var(--line);border-radius:999px;
+  background:var(--panel);color:var(--fg);
   font:inherit;font-size:11px;font-weight:650;line-height:1.2;
-  cursor:pointer;white-space:nowrap;box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06))!important;
-  transition:all .15s ease;
+  cursor:pointer;white-space:nowrap;box-shadow:var(--shadow-sm);
 }
-#headerRealmPill .next-realm-toggle:hover{
-  border-color:var(--line-hover, var(--border, #b9b5aa))!important;
-  background:var(--panel2, #f7f6f3)!important;
-  box-shadow:var(--shadow-md, 0 4px 12px rgba(0,0,0,.10))!important;
-}
-#headerRealmPill .next-status-dot{
-  width:7px;height:7px;border-radius:50%;background:var(--ok,var(--accent));flex:0 0 auto;
-}
-#headerRealmPill .next-realm-toggle svg{width:12px;height:12px;opacity:.6}
-#headerRealmPill .next-realm-menu{
+#headerRealmToggle:hover{background:var(--panel2);border-color:var(--line-hover)}
+#headerRealmToggle .gateway-exit-label{color:var(--dim)}
+#headerRealmToggle svg{width:12px;height:12px;opacity:.6}
+#headerRealmMenu{
   position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:180px;
   display:flex;flex-direction:column;gap:2px;padding:6px;
-  border:1px solid var(--border);border-radius:10px;background:var(--panel);
-  box-shadow:var(--shadow-md,0 8px 24px rgba(0,0,0,.2));
+  border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  box-shadow:var(--shadow-md);
 }
-#headerRealmPill .next-realm-menu[hidden]{display:none!important}
-#headerRealmPill .next-realm-menu button{
+#headerRealmMenu[hidden],#headerRealmMenu button[hidden]{display:none}
+#headerRealmMenu button{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--text);
+  padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--fg);
   font:inherit;font-size:12px;text-align:left;cursor:pointer;
 }
-#headerRealmPill .next-realm-menu button:hover{background:var(--panel2)}
-#headerRealmPill .next-realm-menu button[aria-checked="true"]{
+#headerRealmMenu button:hover{background:var(--panel2)}
+#headerRealmMenu button[aria-checked="true"]{
   background:var(--accent-soft,var(--panel2));color:var(--accent);font-weight:650;
 }
-#headerRealmPill .next-realm-menu button[hidden]{display:none!important}
-#headerRealmPill .next-realm-menu small{color:var(--dim);font-size:10px}
-@media (max-width:640px){#headerRealmPill .next-realm-toggle small{display:none}}
-/* === END HEADER GLOBAL EXIT PILL STYLES === */
-/* In the "next" console layout the topbar already hosts #nextRealmPill; hide
-   the shared header pill there to avoid two exit switchers side by side. */
-html[data-ui="next"] #headerRealmPill{display:none!important}
+#headerRealmMenu small{color:var(--dim);font-size:10px}
+@media (max-width:640px){
+  #headerRealmToggle{gap:4px;padding:4px 7px}
+  #headerRealmToggle svg{display:none}
+}
 .theme-dropdown-wrap{position:relative;display:inline-flex}
 .theme-btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -3836,6 +3826,7 @@ if(!window.__NEXT_UI__ && defaultConsoleLayout) {
     '网关运行日志': 'Gateway logs',
     '网关默认上游已切换并永久保存为:': 'The default upstream is switched and permanently saved as:',
     '网关默认出口': 'Default gateway exit',
+    '切换网关默认出口': 'Change the default gateway exit',
     '网络异常:': 'Network error:',
     '网页通道打卡 (国际版)': 'Web-channel check-in (Global)',
     '网页通道打卡:': 'Web-channel check-in:',
@@ -4762,6 +4753,8 @@ if(!window.__NEXT_UI__ && defaultConsoleLayout) {
     "网关默认上游已切换并永久保存为:": "閘道預設上游已切換並永久儲存為:",
     "网关默认上游已切换并永久保存为: ": "閘道預設上游已切換並永久儲存為: ",
     "网关默认出口": "閘道預設出口",
+    "默认出口": "預設出口",
+    "切换网关默认出口": "切換閘道預設出口",
     // 「网关模型清单」勾选：静态说明、勾选框 tooltip、表头三个批量动作、已选计数与两个即时提示。
     "只有勾选的模型才会写入 DSH 等客户端（一键配置）；默认全部勾选，可用表头「全选 / 全不选 / 反选」批量调整，改完请重新一键配置并重启客户端。": "只有勾選的模型才會寫入 DSH 等客戶端（一鍵配置）；預設全部勾選，可用表頭「全選 / 全不選 / 反選」批次調整，改完請重新一鍵配置並重啟客戶端。",
     "全选": "全選",
@@ -8875,26 +8868,6 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
   html[data-ui="next"] #pageAnalytics .kpis{grid-template-columns:minmax(0,1fr)!important}
 }
 </style>
-<style id="realm-pill-capsule-force">
-/* Force a visible capsule outline on the global exit switchers, in every layout.
-   Uses literal fallbacks so it works even when theme vars are absent. */
-#headerRealmPill .next-realm-toggle,
-#nextRealmPill .next-realm-toggle{
-  border:1px solid var(--line, #d5cfbc) !important;
-  border-radius:999px !important;
-  background:var(--panel, #ffffff) !important;
-  color:var(--fg, #1f1e1b) !important;
-  box-shadow:0 1px 2px rgba(0,0,0,.06) !important;
-  padding:5px 12px !important;
-  min-height:32px !important;
-}
-#headerRealmPill .next-realm-toggle:hover,
-#nextRealmPill .next-realm-toggle:hover{
-  border-color:var(--line-hover, #c5bfab) !important;
-  background:var(--panel2, #f4f2ea) !important;
-  box-shadow:0 4px 12px rgba(0,0,0,.10) !important;
-}
-</style>
 </head>
 <body>
 <header>
@@ -8927,7 +8900,19 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
   </div>
   <div class="header-right">
     <!-- 全局实际出口选择器（传统布局 / 控制台布局共用，所有页面常驻） -->
-    <div id="headerRealmPill" class="next-realm-picker header-realm-picker" data-header-realm-picker><button type="button" id="headerRealmToggle" class="next-realm-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="headerRealmMenu" title="切换网关实际出口"><span class="next-status-dot"></span><span id="headerRealmName">国际版</span><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5 5 5-5"/></svg></button><div id="headerRealmMenu" class="next-realm-menu" role="menu" aria-label="选择网关实际出口" hidden><button type="button" role="menuitemradio" data-realm="intl"><span>国际版</span><small>Global</small></button><button type="button" role="menuitemradio" data-realm="cn"><span>国内版</span><small>China</small></button><button type="button" role="menuitemradio" data-realm="codearts" data-header-realm-codearts><span>CodeArts</span><small>华为云</small></button></div></div>
+    <div id="headerRealmPill" data-gateway-realm="intl">
+      <button type="button" id="headerRealmToggle" aria-haspopup="menu" aria-expanded="false"
+              aria-controls="headerRealmMenu" title="切换网关默认出口">
+        <span class="gateway-exit-label">默认出口</span>
+        <span id="headerRealmName">国际版</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5 5 5-5"/></svg>
+      </button>
+      <div id="headerRealmMenu" role="menu" aria-label="网关默认出口" hidden>
+        <button type="button" role="menuitemradio" data-realm="intl"><span>国际版</span><small>Global</small></button>
+        <button type="button" role="menuitemradio" data-realm="cn"><span>国内版</span><small>China</small></button>
+        <button type="button" role="menuitemradio" data-realm="codearts" hidden><span>CodeArts</span><small>华为云</small></button>
+      </div>
+    </div>
     <button type="button" class="lang-btn" id="langToggleBtn" onclick="toggleLang(event)" data-no-i18n title="切换语言 (简体中文 / 正體中文 / English)" aria-label="切换语言">
       <span id="langToggleLabel">EN</span>
     </button>
@@ -9242,14 +9227,9 @@ body.win-capped #pageAnalytics section.panel .usage-dimension-scroll{
         <span id="activeGatewayName" style="font-size:20px;font-weight:700;color:var(--accent);letter-spacing:-.4px">国际版 (Global)</span>
       </div>
       <div style="margin-top:auto">
-        <!-- 直接选，不再「⇄ 切到下一个」：三个出口时轮转要点两次才到 CodeArts。
-             选项由 syncRealmPicker() 按 /realm 返回的 options 生成（CodeArts 没
-             配置时只有两项），原生 select 会被上面的自定义下拉接管成主题样式。 -->
-        <select id="realmPicker" style="width:100%" aria-label="网关默认出口"
-                onchange="setActiveGatewayRealm(this.value)">
-          <option value="intl">国际版</option>
-          <option value="cn">国内版</option>
-        </select>
+        <button class="toggle-realm-btn" id="btnToggleRealm" onclick="toggleActiveGatewayRealm()" style="cursor:pointer;width:100%;padding:7px 12px;font-size:12px">
+          ⇄ 切换默认出口为【国内版】
+        </button>
       </div>
     </div>
 
@@ -12270,7 +12250,9 @@ async function pollLogin(){
 }
 
 
-window.ACTIVE_GATEWAY_REALM = "intl";
+const initialGatewayRealm = document.getElementById("headerRealmPill")?.getAttribute("data-gateway-realm");
+window.ACTIVE_GATEWAY_REALM = ["intl", "cn", "codearts"].includes(initialGatewayRealm)
+  ? initialGatewayRealm : "intl";
 window.VIEW_REALM = "intl";
 window.REALM_FILTER = "all";
 window.MODELS_DATA = [];
@@ -12336,6 +12318,7 @@ function updateUI(){
   updateProductAllButton();
 
   const gwRealm = window.ACTIVE_GATEWAY_REALM || "intl";
+  if(typeof window.syncHeaderRealmPill === 'function') window.syncHeaderRealmPill();
   const isIntlGw = (gwRealm === "intl");
   const isCnGw = (gwRealm === "cn");
   const isCaGw = (gwRealm === "codearts");
@@ -12521,54 +12504,27 @@ function realmLabel(r){
   return r === "intl" ? "国际版" : (r === "cn" ? "国内版" : "CodeArts");
 }
 
-async function setActiveGatewayRealm(realm){
+let gatewayRealmSwitching = false;
+async function setActiveGatewayRealm(realm, followView = false){
   const options = window.REALM_OPTIONS || ["intl", "cn"];
   const cur = window.ACTIVE_GATEWAY_REALM || "intl";
-  if(!realm || realm === cur || options.indexOf(realm) < 0){
-    syncRealmPicker();
-    return;
-  }
+  if(gatewayRealmSwitching || realm === cur || !options.includes(realm)) return;
+  gatewayRealmSwitching = true;
   try {
     const res = await postJSON("/realm", {realm: realm});
     window.ACTIVE_GATEWAY_REALM = res.current || realm;
-    toast("网关默认上游已切换并永久保存为: " + realmLabel(window.ACTIVE_GATEWAY_REALM));
-    setViewRealm(window.ACTIVE_GATEWAY_REALM);
-    window.updateUI();
-    if(window.ACTIVE_GATEWAY_REALM === "codearts"){
-      await Promise.all([loadCodeartsOverview(true), loadModels(),
-                         loadAnalytics(), refresh()]);
-    }else{
-      await Promise.all([loadAccounts(), loadModels(), loadGrowthTasks(),
-                         loadSchedulerStatus(), loadAnalytics(), refresh()]);
-    }
   }catch(e){
     alert("切换失败: " + e.message);
-    syncRealmPicker();
+    return;
+  }finally{
+    gatewayRealmSwitching = false;
   }
-};
-
-/* 下拉的选项与选中项。选项集只在 CodeArts 启用/停用后变化，所以按 data-options
-   比对，变了才重建 innerHTML——每轮 updateUI 都重写会把自定义下拉的面板一起
-   重建，还会让 i18n 多走一遍整棵树。 */
-function syncRealmPicker(){
-  const sel = document.getElementById("realmPicker");
-  if(!sel) return;
-  const options = (window.REALM_OPTIONS && window.REALM_OPTIONS.length)
-    ? window.REALM_OPTIONS : ["intl", "cn"];
-  const want = options.join(",");
-  if(sel.getAttribute("data-options") !== want){
-    sel.setAttribute("data-options", want);
-    sel.innerHTML = options.map(function(r){
-      return '<option value="' + r + '">' + realmLabel(r) + "</option>";
-    }).join("");
-    /* 新长出来的 <option> 是中文原文：非简体界面要再走一次 i18n，否则切过语言
-       之后重建的这一项（通常是 CodeArts）会停在中文。 */
-    if(window.WB_I18N && window.WB_I18N.current && window.WB_I18N.current() !== "zh"){
-      window.WB_I18N.apply();
-    }
-  }
-  sel.value = window.ACTIVE_GATEWAY_REALM || "intl";
-};
+  const active = window.ACTIVE_GATEWAY_REALM;
+  toast("网关默认上游已切换并永久保存为: " + realmLabel(active));
+  if(followView && window.VIEW_REALM !== active) return switchViewRealm(active);
+  window.updateUI();
+  return refresh();
+}
 
 
 async function toggleActiveGatewayRealm(){
@@ -12576,23 +12532,7 @@ async function toggleActiveGatewayRealm(){
   const cur = window.ACTIVE_GATEWAY_REALM || "intl";
   let idx = options.indexOf(cur);
   if(idx < 0) idx = 0;
-  const next = options[(idx + 1) % options.length];
-  try {
-    const res = await postJSON("/realm", {realm: next});
-    window.ACTIVE_GATEWAY_REALM = res.current || next;
-    toast("网关默认上游已切换并永久保存为: " + realmLabel(window.ACTIVE_GATEWAY_REALM));
-    setViewRealm(window.ACTIVE_GATEWAY_REALM);
-    window.updateUI();
-    if(window.ACTIVE_GATEWAY_REALM === "codearts"){
-      await Promise.all([loadCodeartsOverview(true), loadModels(),
-                         loadAnalytics(), refresh()]);
-    }else{
-      await Promise.all([loadAccounts(), loadModels(), loadGrowthTasks(),
-                         loadSchedulerStatus(), loadAnalytics(), refresh()]);
-    }
-  }catch(e){
-    alert("切换失败: " + e.message);
-  }
+  return setActiveGatewayRealm(options[(idx + 1) % options.length], true);
 };
 
 /* ---- CodeArts 第三出口 ---- */
@@ -12989,6 +12929,7 @@ async function refreshActiveRealm(){
     const r = await getJSON("/realm");
     if(r && r.current) window.ACTIVE_GATEWAY_REALM = r.current;
     if(r && Array.isArray(r.options)) window.REALM_OPTIONS = r.options;
+    if(typeof window.syncHeaderRealmPill === 'function') window.syncHeaderRealmPill();
   } catch(e){}
 }
 
@@ -28784,10 +28725,7 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function nextRealmLabel(){
-    // Keep the global exit pill in sync with the persisted gateway exit, not the
-    // per-page view: the model-catalogue realm switch only changes VIEW_REALM and
-    // must not make the header claim the gateway exit changed (issue: 2026-11-26).
-    var realm = window.ACTIVE_GATEWAY_REALM || 'intl';
+    var realm = window.VIEW_REALM || 'intl';
     if(realm === 'codearts') return 'CodeArts';
     if(realm === 'cn') return '国内版';
     return '国际版';
@@ -28877,8 +28815,6 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
     if(moreBtn) moreBtn.classList.toggle('active', MORE_TABS.indexOf(tab) >= 0);
 
     var realm = nextRealmLabel();
-    // The header pill reflects the persisted gateway exit, but the model-catalogue
-    // realm switch below is a view filter and must keep highlighting VIEW_REALM.
     var realmKey = window.VIEW_REALM || 'intl';
     var realmName = document.getElementById('nextRealmName');
     if(realmName) realmName.textContent = realm;
@@ -29275,7 +29211,7 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 
   function realmKey(){
-    return window.ACTIVE_GATEWAY_REALM || 'intl';
+    return window.VIEW_REALM || 'intl';
   }
 
   function syncNextMeta(){
@@ -29448,11 +29384,8 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
       syncPicker();
       return;
     }
-    // This pill represents the persisted gateway exit: clicking must switch the
-    // real exit (setActiveGatewayRealm), not just the per-page view. View-only
-    // switching stays on the model-catalogue / accounts page realm buttons.
-    if(typeof window.setActiveGatewayRealm === 'function'){
-      var result = window.setActiveGatewayRealm(realm);
+    if(typeof window.switchViewRealm === 'function'){
+      var result = window.switchViewRealm(realm);
       if(result && typeof result.then === 'function'){
         result.then(scheduleDecorate, scheduleDecorate);
       }
@@ -31050,80 +30983,70 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
 })();
 /* === NEXT-UI REFACTOR V2 RUNTIME END === */
 
-/* === HEADER GLOBAL EXIT PILL (all layouts) === */
+/* The shared header-right node also moves into the next layout's top bar. */
 (function(){
-  function labels(r){ return r === 'codearts' ? 'CodeArts' : r === 'cn' ? '国内版' : '国际版'; }
-  function activeRealm(){ return (window.ACTIVE_GATEWAY_REALM || 'intl'); }
-  function pill(){ return document.getElementById('headerRealmPill'); }
-  function opts(){ var o = window.REALM_OPTIONS || ['intl','cn']; return o; }
-  function sync(){
-    var p = pill(); if(!p) return;
-    var want = labels(activeRealm());
-    var name = document.getElementById('headerRealmName');
-    if(name && name.textContent !== want) name.textContent = want;
-    var menu = document.getElementById('headerRealmMenu');
-    if(menu){
-      Array.prototype.forEach.call(menu.querySelectorAll('[data-realm]'), function(item){
-        var r = item.getAttribute('data-realm');
-        item.hidden = opts().indexOf(r) < 0;
-        var on = r === activeRealm();
-        item.setAttribute('aria-checked', on ? 'true' : 'false');
-        item.classList.toggle('active', on);
-      });
-    }
-  }
-  function bind(){
-    var p = pill(); if(!p || p.getAttribute('data-hdr-bound') === '1') return;
-    p.setAttribute('data-hdr-bound','1');
-    var toggle = document.getElementById('headerRealmToggle');
-    var menu = document.getElementById('headerRealmMenu');
-    if(toggle && menu){
-      toggle.addEventListener('click', function(e){
-        e.stopPropagation(); menu.hidden = !menu.hidden;
-        toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-        sync();
-      });
-      menu.addEventListener('click', function(e){
-        var item = e.target && e.target.closest ? e.target.closest('[data-realm]') : null;
-        if(!item) return;
-        var r = item.getAttribute('data-realm');
-        menu.hidden = true; toggle.setAttribute('aria-expanded','false');
-        if(r === activeRealm() || opts().indexOf(r) < 0){ sync(); return; }
-        if(typeof window.setActiveGatewayRealm === 'function') window.setActiveGatewayRealm(r);
-      });
-      document.addEventListener('click', function(e){ if(!p.contains(e.target)){ menu.hidden = true; toggle.setAttribute('aria-expanded','false'); } });
-    }
-    sync();
-  }
-  function init(){ bind(); sync(); }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  const pill = document.getElementById('headerRealmPill');
+  const toggle = document.getElementById('headerRealmToggle');
+  const menu = document.getElementById('headerRealmMenu');
+  const name = document.getElementById('headerRealmName');
+  if(!pill || !toggle || !menu || !name) return;
 
-  // The real exit arrives asynchronously (initRealm -> GET /realm). updateUI()
-  // runs right after that resolves and after every realm switch, so hook it for
-  // instant sync instead of waiting for a poll (that lag made the pill show the
-  // stale value for ~2s in legacy/console layouts).
-  if(typeof window.updateUI === 'function' && !window.__hdrPillHooked){
-    window.__hdrPillHooked = true;
-    var _origUpdateUI = window.updateUI;
-    window.updateUI = function(){
-      var out = _origUpdateUI.apply(this, arguments);
-      try { sync(); } catch(e){}
-      return out;
-    };
+  function sync(){
+    const realm = window.ACTIVE_GATEWAY_REALM || 'intl';
+    if(pill.getAttribute('data-gateway-realm') !== realm){
+      pill.setAttribute('data-gateway-realm', realm);
+      name.textContent = realmLabel(realm);
+    }
+    const options = window.REALM_OPTIONS || ['intl', 'cn'];
+    menu.querySelectorAll('[data-realm]').forEach(item => {
+      const key = item.getAttribute('data-realm');
+      const hidden = !options.includes(key);
+      const checked = String(realm === key);
+      if(item.hidden !== hidden) item.hidden = hidden;
+      if(item.getAttribute('aria-checked') !== checked) item.setAttribute('aria-checked', checked);
+    });
   }
-  window.addEventListener('load', sync);
-  window.addEventListener('pageshow', sync);
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) sync(); });
-  // Cheap fallback poll; sync() only touches the DOM when the label changed.
-  var pillTimer = setInterval(sync, 300);
-  // Node DOM-sandbox tests run this inline script with real timers; an
-  // unref'd interval must not keep their process alive (they assert, then
-  // exit). Browsers have no unref(), so polling stays normal there.
-  if (pillTimer && typeof pillTimer.unref === 'function') pillTimer.unref();
-  window.__syncHeaderRealmPill = sync;
+
+  function setOpen(open, focusToggle = false){
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if(open){
+      sync();
+      const selected = menu.querySelector('[aria-checked="true"]:not([hidden])');
+      (selected || menu.querySelector('button:not([hidden])'))?.focus();
+    }else if(focusToggle){
+      toggle.focus();
+    }
+  }
+
+  toggle.addEventListener('click', () => setOpen(menu.hidden));
+  menu.addEventListener('click', event => {
+    const item = event.target.closest('[data-realm]');
+    if(!item || item.hidden) return;
+    setOpen(false, true);
+    setActiveGatewayRealm(item.getAttribute('data-realm'));
+  });
+  pill.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && !menu.hidden){
+      event.preventDefault();
+      setOpen(false, true);
+    }
+  });
+  menu.addEventListener('keydown', event => {
+    if(event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = [...menu.querySelectorAll('button:not([hidden])')];
+    if(!items.length) return;
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    const index = items.indexOf(document.activeElement);
+    items[(index + step + items.length) % items.length].focus();
+  });
+  document.addEventListener('click', event => {
+    if(!menu.hidden && !pill.contains(event.target)) setOpen(false);
+  });
+  window.syncHeaderRealmPill = sync;
+  sync();
 })();
-/* === END HEADER GLOBAL EXIT PILL === */
 </script>
 </body>
 </html>
