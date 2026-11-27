@@ -90,7 +90,7 @@ REQUIRED_FILES = (
     "Lib/ctypes/__init__.py", "Lib/collections/__init__.py", "Lib/re/__init__.py",
     "DLLs/_socket.pyd", "DLLs/_ssl.pyd", "DLLs/_hashlib.pyd", "DLLs/_ctypes.pyd",
     "DLLs/select.pyd", "DLLs/unicodedata.pyd", "DLLs/_uuid.pyd", "DLLs/_decimal.pyd",
-    "DLLs/_sqlite3.pyd",
+    "DLLs/_sqlite3.pyd", "DLLs/_struct.pyd",
     "DLLs/libffi-8.dll", "DLLs/libssl-3-x64.dll", "DLLs/libcrypto-3-x64.dll",
 )
 
