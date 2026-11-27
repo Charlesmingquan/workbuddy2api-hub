@@ -25377,23 +25377,27 @@ class Handler(BaseHTTPRequestHandler):
             b'data-ui-language="__WB_UI_LANGUAGE__"',
             ('data-ui-language="%s"' % language).encode("utf-8"),
         )
+        # Snapshot the persisted exit for the first paint and for the ETag.
+        # The view selector follows its own state, including ?view= overrides.
+        realm = CURRENT_REALM
+        realm_label = {"codearts": "CodeArts", "cn": "国内版"}.get(realm)
+        if realm_label:
+            body = body.replace(b'data-gateway-realm="intl"',
+                                ('data-gateway-realm="%s"' % realm).encode("ascii"), 1)
+            body = body.replace(
+                '<span id="headerRealmName">国际版</span>'.encode("utf-8"),
+                ('<span id="headerRealmName">%s</span>' % realm_label).encode("utf-8"), 1)
         # 面板首页是纯静态资源（服务端逐字节原样发出、不含任何机密），所以可以
         # 允许浏览器存储副本、每次打开再回源校验：校验命中回 304（无 body），
         # 省下整页（约 470KB）的重复下载，手机 / Tailscale 远程访问体感最明显。
         #
-        # 校验符必须覆盖**所有**影响响应体的输入，不只是文件本身：body 还取决于
-        # 上面注入的 ui_language——用户改一次界面语言，文件没动、body 却变了；
-        # 若 tag 只看文件，客户端带旧 tag 回来会拿到 304 + 旧语言的页面。所以 tag
-        # 由 (文件 mtime_ns, size, language) 三者派生：前两个代表文件字节（本文件
-        # 只在应用更新时被整体替换、从不原地修改），第三个就是本次实际注入的值，
-        # 三者组合变化 ⇔ 响应字节变化。mtime 用纳秒精度，同一秒内的两次替换也能
-        # 得到不同 tag。
+        # 文件、面板语言或默认出口任一变化时，浏览器都要重新读取首页。
         etag = None
         try:
             st = os.stat(DASHBOARD_HTML)
-            # 强校验符（不带 W/ 前缀）：响应是「文件字节 + 本次语言」的精确副本，
+            # 强校验符（不带 W/ 前缀）：覆盖文件字节与本次注入值，
             # tag 变 ⇔ 字节变。
-            etag = '"%x-%x-%s"' % (st.st_mtime_ns, st.st_size, language)
+            etag = '"%x-%x-%s-%s"' % (st.st_mtime_ns, st.st_size, language, realm)
         except Exception:
             # stat 取不到（或时间戳无法表示）不是致命错误：退化为一律按普通
             # 200 处理，只是这一次没有条件请求支持，绝不让面板页本身打不开。

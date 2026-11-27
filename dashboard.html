@@ -756,6 +756,40 @@ a:hover{text-decoration:underline}
 
 /* 顶部右侧区域与主题切换组件 (黑白单色、极简线条Outline、符合规范) */
 .header-right{display:flex;align-items:center;gap:10px}
+
+/* The default gateway exit is separate from the panel's view selector. */
+#headerRealmPill{position:relative;display:inline-flex;flex:0 0 auto}
+#headerRealmToggle{
+  appearance:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;
+  padding:5px 10px;border:1px solid var(--line);border-radius:999px;
+  background:var(--panel);color:var(--fg);
+  font:inherit;font-size:11px;font-weight:650;line-height:1.2;
+  cursor:pointer;white-space:nowrap;box-shadow:var(--shadow-sm);
+}
+#headerRealmToggle:hover{background:var(--panel2);border-color:var(--line-hover)}
+#headerRealmToggle .gateway-exit-label{color:var(--dim)}
+#headerRealmToggle svg{width:12px;height:12px;opacity:.6}
+#headerRealmMenu{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:180px;
+  display:flex;flex-direction:column;gap:2px;padding:6px;
+  border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  box-shadow:var(--shadow-md);
+}
+#headerRealmMenu[hidden],#headerRealmMenu button[hidden]{display:none}
+#headerRealmMenu button{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--fg);
+  font:inherit;font-size:12px;text-align:left;cursor:pointer;
+}
+#headerRealmMenu button:hover{background:var(--panel2)}
+#headerRealmMenu button[aria-checked="true"]{
+  background:var(--accent-soft,var(--panel2));color:var(--accent);font-weight:650;
+}
+#headerRealmMenu small{color:var(--dim);font-size:10px}
+@media (max-width:640px){
+  #headerRealmToggle{gap:4px;padding:4px 7px}
+  #headerRealmToggle svg{display:none}
+}
 .theme-dropdown-wrap{position:relative;display:inline-flex}
 .theme-btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -3805,6 +3839,7 @@ if(!window.__NEXT_UI__ && defaultConsoleLayout) {
     '网关运行日志': 'Gateway logs',
     '网关默认上游已切换并永久保存为:': 'The default upstream is switched and permanently saved as:',
     '网关默认出口': 'Default gateway exit',
+    '切换网关默认出口': 'Change the default gateway exit',
     '网络异常:': 'Network error:',
     '网页通道打卡 (国际版)': 'Web-channel check-in (Global)',
     '网页通道打卡:': 'Web-channel check-in:',
@@ -4744,6 +4779,8 @@ if(!window.__NEXT_UI__ && defaultConsoleLayout) {
     "网关默认上游已切换并永久保存为:": "閘道預設上游已切換並永久儲存為:",
     "网关默认上游已切换并永久保存为: ": "閘道預設上游已切換並永久儲存為: ",
     "网关默认出口": "閘道預設出口",
+    "默认出口": "預設出口",
+    "切换网关默认出口": "切換閘道預設出口",
     // 「网关模型清单」勾选：静态说明、勾选框 tooltip、表头三个批量动作、已选计数与两个即时提示。
     "只有勾选的模型才会写入 DSH 等客户端（一键配置）；默认全部勾选，可用表头「全选 / 全不选 / 反选」批量调整，改完请重新一键配置并重启客户端。": "只有勾選的模型才會寫入 DSH 等客戶端（一鍵配置）；預設全部勾選，可用表頭「全選 / 全不選 / 反選」批次調整，改完請重新一鍵配置並重啟客戶端。",
     "全选": "全選",
@@ -6204,6 +6241,8 @@ html[data-ui="next"] #nextRealmPill .next-realm-menu small{
   font-size:9.5px;
   font-weight:500;
 }
+
+
 html[data-ui="next"] #nextRealmPill.next-realm-muted .next-realm-toggle{
   border-color:var(--border);
   background:var(--surface);
@@ -8897,6 +8936,20 @@ html:not([data-ui="next"]) .settings-cat-bar{
     </button>
   </div>
   <div class="header-right">
+    <!-- 全局实际出口选择器（传统布局 / 控制台布局共用，所有页面常驻） -->
+    <div id="headerRealmPill" data-gateway-realm="intl">
+      <button type="button" id="headerRealmToggle" aria-haspopup="menu" aria-expanded="false"
+              aria-controls="headerRealmMenu" title="切换网关默认出口">
+        <span class="gateway-exit-label">默认出口</span>
+        <span id="headerRealmName">国际版</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5 5 5-5"/></svg>
+      </button>
+      <div id="headerRealmMenu" role="menu" aria-label="网关默认出口" hidden>
+        <button type="button" role="menuitemradio" data-realm="intl"><span>国际版</span><small>Global</small></button>
+        <button type="button" role="menuitemradio" data-realm="cn"><span>国内版</span><small>China</small></button>
+        <button type="button" role="menuitemradio" data-realm="codearts" hidden><span>CodeArts</span><small>华为云</small></button>
+      </div>
+    </div>
     <button type="button" class="lang-btn" id="langToggleBtn" onclick="toggleLang(event)" data-no-i18n title="切换语言 (简体中文 / 正體中文 / English)" aria-label="切换语言">
       <span id="langToggleLabel">EN</span>
     </button>
@@ -12234,7 +12287,9 @@ async function pollLogin(){
 }
 
 
-window.ACTIVE_GATEWAY_REALM = "intl";
+const initialGatewayRealm = document.getElementById("headerRealmPill")?.getAttribute("data-gateway-realm");
+window.ACTIVE_GATEWAY_REALM = ["intl", "cn", "codearts"].includes(initialGatewayRealm)
+  ? initialGatewayRealm : "intl";
 window.VIEW_REALM = "intl";
 window.REALM_FILTER = "all";
 window.MODELS_DATA = [];
@@ -12300,6 +12355,7 @@ function updateUI(){
   updateProductAllButton();
 
   const gwRealm = window.ACTIVE_GATEWAY_REALM || "intl";
+  if(typeof window.syncHeaderRealmPill === 'function') window.syncHeaderRealmPill();
   const isIntlGw = (gwRealm === "intl");
   const isCnGw = (gwRealm === "cn");
   const isCaGw = (gwRealm === "codearts");
@@ -12485,28 +12541,35 @@ function realmLabel(r){
   return r === "intl" ? "国际版" : (r === "cn" ? "国内版" : "CodeArts");
 }
 
+let gatewayRealmSwitching = false;
+async function setActiveGatewayRealm(realm, followView = false){
+  const options = window.REALM_OPTIONS || ["intl", "cn"];
+  const cur = window.ACTIVE_GATEWAY_REALM || "intl";
+  if(gatewayRealmSwitching || realm === cur || !options.includes(realm)) return;
+  gatewayRealmSwitching = true;
+  try {
+    const res = await postJSON("/realm", {realm: realm});
+    window.ACTIVE_GATEWAY_REALM = res.current || realm;
+  }catch(e){
+    alert("切换失败: " + e.message);
+    return;
+  }finally{
+    gatewayRealmSwitching = false;
+  }
+  const active = window.ACTIVE_GATEWAY_REALM;
+  toast("网关默认上游已切换并永久保存为: " + realmLabel(active));
+  if(followView && window.VIEW_REALM !== active) return switchViewRealm(active);
+  window.updateUI();
+  return refresh();
+}
+
+
 async function toggleActiveGatewayRealm(){
   const options = window.REALM_OPTIONS || ["intl", "cn"];
   const cur = window.ACTIVE_GATEWAY_REALM || "intl";
   let idx = options.indexOf(cur);
   if(idx < 0) idx = 0;
-  const next = options[(idx + 1) % options.length];
-  try {
-    const res = await postJSON("/realm", {realm: next});
-    window.ACTIVE_GATEWAY_REALM = res.current || next;
-    toast("网关默认上游已切换并永久保存为: " + realmLabel(window.ACTIVE_GATEWAY_REALM));
-    setViewRealm(window.ACTIVE_GATEWAY_REALM);
-    window.updateUI();
-    if(window.ACTIVE_GATEWAY_REALM === "codearts"){
-      await Promise.all([loadCodeartsOverview(true), loadModels(),
-                         loadAnalytics(), refresh()]);
-    }else{
-      await Promise.all([loadAccounts(), loadModels(), loadGrowthTasks(),
-                         loadSchedulerStatus(), loadAnalytics(), refresh()]);
-    }
-  }catch(e){
-    alert("切换失败: " + e.message);
-  }
+  return setActiveGatewayRealm(options[(idx + 1) % options.length], true);
 };
 
 /* ---- CodeArts 第三出口 ---- */
@@ -12903,6 +12966,7 @@ async function refreshActiveRealm(){
     const r = await getJSON("/realm");
     if(r && r.current) window.ACTIVE_GATEWAY_REALM = r.current;
     if(r && Array.isArray(r.options)) window.REALM_OPTIONS = r.options;
+    if(typeof window.syncHeaderRealmPill === 'function') window.syncHeaderRealmPill();
   } catch(e){}
 }
 
@@ -30977,6 +31041,71 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
   }
 })();
 /* === NEXT-UI REFACTOR V2 RUNTIME END === */
+
+/* The shared header-right node also moves into the next layout's top bar. */
+(function(){
+  const pill = document.getElementById('headerRealmPill');
+  const toggle = document.getElementById('headerRealmToggle');
+  const menu = document.getElementById('headerRealmMenu');
+  const name = document.getElementById('headerRealmName');
+  if(!pill || !toggle || !menu || !name) return;
+
+  function sync(){
+    const realm = window.ACTIVE_GATEWAY_REALM || 'intl';
+    if(pill.getAttribute('data-gateway-realm') !== realm){
+      pill.setAttribute('data-gateway-realm', realm);
+      name.textContent = realmLabel(realm);
+    }
+    const options = window.REALM_OPTIONS || ['intl', 'cn'];
+    menu.querySelectorAll('[data-realm]').forEach(item => {
+      const key = item.getAttribute('data-realm');
+      const hidden = !options.includes(key);
+      const checked = String(realm === key);
+      if(item.hidden !== hidden) item.hidden = hidden;
+      if(item.getAttribute('aria-checked') !== checked) item.setAttribute('aria-checked', checked);
+    });
+  }
+
+  function setOpen(open, focusToggle = false){
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if(open){
+      sync();
+      const selected = menu.querySelector('[aria-checked="true"]:not([hidden])');
+      (selected || menu.querySelector('button:not([hidden])'))?.focus();
+    }else if(focusToggle){
+      toggle.focus();
+    }
+  }
+
+  toggle.addEventListener('click', () => setOpen(menu.hidden));
+  menu.addEventListener('click', event => {
+    const item = event.target.closest('[data-realm]');
+    if(!item || item.hidden) return;
+    setOpen(false, true);
+    setActiveGatewayRealm(item.getAttribute('data-realm'));
+  });
+  pill.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && !menu.hidden){
+      event.preventDefault();
+      setOpen(false, true);
+    }
+  });
+  menu.addEventListener('keydown', event => {
+    if(event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = [...menu.querySelectorAll('button:not([hidden])')];
+    if(!items.length) return;
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    const index = items.indexOf(document.activeElement);
+    items[(index + step + items.length) % items.length].focus();
+  });
+  document.addEventListener('click', event => {
+    if(!menu.hidden && !pill.contains(event.target)) setOpen(false);
+  });
+  window.syncHeaderRealmPill = sync;
+  sync();
+})();
 </script>
 </body>
 </html>
