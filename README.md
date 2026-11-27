@@ -291,6 +291,10 @@ python tests/run_all.py realm      # 只跑名字里含 realm 的
 
 本版更新请查看 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**。
 
+### Unreleased
+
+- 传统布局的设置分类栏移到顶部，分组标题和说明随选择更新（#41）。
+
 ---
 
 ## 八、致谢与引用声明 (Credits & References)
