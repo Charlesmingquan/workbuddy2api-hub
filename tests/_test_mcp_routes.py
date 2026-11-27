@@ -90,12 +90,14 @@ class FakeHandler(P.Handler):
         return "k-1"
 
     def _key_realm(self):
-        return ""
+        return (self.key_entry or {}).get("realm") or ""
 
 
 class FakeAccount(object):
-    def __init__(self, uid):
+    def __init__(self, uid, realm="intl"):
         self.uid = uid
+        self.realm = realm
+        self.proxy = ""
         self.errors = []
         self.successes = []
 
@@ -106,17 +108,50 @@ class FakeAccount(object):
     def note_success(self, model=None):
         self.successes.append(model)
 
+    def ready(self, model=None):
+        return True
+
+    def unavailable_reason(self, model=None):
+        return ""
+
+    def chat_base_url(self):
+        return "https://upstream.test"
+
+    def headers(self, purpose="chat", model=None):
+        return {"Authorization": "Bearer test"}
+
+    def note_restricted(self, detail=None):
+        self.errors.append("restricted:" + str(detail))
+
 
 class FakePool(object):
     def __init__(self, accounts):
         self.accounts = list(accounts)
+        self.last_allowed = object()
 
     def pick(self, realm=None, exclude=None, model=None, page=None, allowed=None):
         exclude = exclude or set()
+        self.last_allowed = allowed
         for account in self.accounts:
             if account.uid in exclude:
                 continue
+            if realm and account.realm != realm:
+                continue
+            if allowed is not None and account.uid not in allowed:
+                continue
             return account
+        return None
+
+    def require(self, account):
+        return None
+
+    def empty_detail(self, realm):
+        return "pool empty for %s" % realm
+
+    def get(self, uid):
+        for account in self.accounts:
+            if account.uid == uid:
+                return account
         return None
 
 
@@ -258,6 +293,84 @@ class McpEndpointTests(unittest.TestCase):
         self.assertEqual(result["structuredContent"]["data"][0]["url"], "https://x/y.png")
         self.assertEqual(json.loads(result["content"][0]["text"]),
                          result["structuredContent"])
+
+    def test_media_tool_honours_key_model_allow_list(self):
+        self.handler.key_entry = {"id": "k-1", "models": ["chat-only"]}
+        self.handler.body = {
+            "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+            "params": {"name": "generate_image",
+                       "arguments": {"prompt": "a cat", "model": "image-model"}},
+        }
+        self.handler._handle_mcp()
+        result = self.handler.sent[1]["result"]
+        self.assertTrue(result["isError"])
+        self.assertIn("模型", result["content"][0]["text"])
+
+    def test_media_tool_allows_restricted_key_when_model_matches(self):
+        self.handler.key_entry = {"id": "k-1", "models": ["image-model"]}
+        seen = []
+
+        def fake_media(path, payload):
+            seen.append((path, payload.get("model")))
+            return self.handler._json(200, {"ok": True})
+
+        self.handler._handle_media_post = fake_media
+        self.handler.body = {
+            "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "params": {"name": "generate_image",
+                       "arguments": {"prompt": "a cat", "model": "image-model"}},
+        }
+        self.handler._handle_mcp()
+        self.assertEqual(seen, [("/v1/images/generations", "image-model")])
+        self.assertFalse(self.handler.sent[1]["result"]["isError"])
+
+    def test_media_tool_allows_restricted_key_without_explicit_model(self):
+        self.handler.key_entry = {"id": "k-1", "models": ["image-model"]}
+        seen = []
+
+        def fake_media(path, payload):
+            seen.append(payload.get("model"))
+            return self.handler._json(200, {"ok": True})
+
+        self.handler._handle_media_post = fake_media
+        self.handler.body = {
+            "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+            "params": {"name": "generate_image",
+                       "arguments": {"prompt": "a cat"}},
+        }
+        self.handler._handle_mcp()
+        self.assertEqual(seen, [None])
+        self.assertFalse(self.handler.sent[1]["result"]["isError"])
+
+    def test_media_tool_rejects_exhausted_key_credit(self):
+        self.handler.key_entry = {"id": "k-1", "credit_limit": 10}
+        with mock.patch.object(P, "key_credit_exhausted",
+                               return_value=(True, 10.0, 10.0)):
+            self.handler.body = {
+                "jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                "params": {"name": "generate_image",
+                           "arguments": {"prompt": "a cat"}},
+            }
+            self.handler._handle_mcp()
+        result = self.handler.sent[1]["result"]
+        self.assertTrue(result["isError"])
+        self.assertIn("Credit quota", result["content"][0]["text"])
+
+    def test_media_tool_releases_key_slot_after_call(self):
+        self.handler.key_entry = {"id": "k-1", "concurrency_limit": 1}
+        with mock.patch.object(P, "_acquire_key_slot",
+                               return_value=(True, 1, 1)) as acquire, \
+                mock.patch.object(P, "_release_key_slot") as release:
+            self.handler._handle_media_post = (
+                lambda path, payload: self.handler._json(200, {"ok": True}))
+            self.handler.body = {
+                "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+                "params": {"name": "generate_image",
+                           "arguments": {"prompt": "a cat"}},
+            }
+            self.handler._handle_mcp()
+        acquire.assert_called_once_with(self.handler.key_entry)
+        release.assert_called_once_with(self.handler.key_entry)
 
 
 class McpHelperTests(unittest.TestCase):
@@ -425,6 +538,86 @@ class EmbeddingsRouteTests(unittest.TestCase):
     def test_empty_input_is_400(self):
         self.handler._handle_embeddings_post({"input": []})
         self.assertEqual(self.handler.sent[0], 400)
+
+    def test_key_model_allow_list_blocks_unlisted_embedding_model(self):
+        self.handler.key_entry = {"id": "k-1", "models": ["chat-only"]}
+        with mock.patch.object(wb_embeddings, "request") as request:
+            self.handler._handle_embeddings_post({"input": "hello"})
+        request.assert_not_called()
+        self.assertEqual(self.handler.sent[0], 400)
+
+    def test_key_model_allow_list_permits_named_embedding_model(self):
+        self.handler.key_entry = {"id": "k-1", "models": ["bge-m3"]}
+        raw = {"code": 0, "model": "bge-m3",
+               "data": [{"embedding": [0.1]}],
+               "usage": {"prompt_tokens": 1, "total_tokens": 1}}
+        with mock.patch.object(wb_embeddings, "request", return_value=raw) as request:
+            self.handler._handle_embeddings_post({"input": "hello"})
+        request.assert_called_once()
+        self.assertEqual(self.handler.sent[0], 200)
+
+    def test_key_account_allow_list_reaches_pool(self):
+        second = FakeAccount("acc-2")
+        pool = FakePool([self.account, second])
+        P.POOL = pool
+        self.handler.key_entry = {
+            "id": "k-1", "models": ["bge-m3"], "accounts": ["acc-2"]}
+        raw = {"code": 0, "model": "bge-m3",
+               "data": [{"embedding": [0.1]}],
+               "usage": {"prompt_tokens": 1, "total_tokens": 1}}
+        with mock.patch.object(wb_embeddings, "request", return_value=raw) as request:
+            self.handler._handle_embeddings_post({"input": "hello"})
+        self.assertEqual(request.call_args[0][0].uid, "acc-2")
+        self.assertEqual(pool.last_allowed, {"acc-2"})
+
+    def test_key_realm_conflicts_with_model_prefix(self):
+        self.handler.key_entry = {"id": "k-1", "realm": "cn"}
+        with mock.patch.object(wb_embeddings, "request") as request:
+            self.handler._handle_embeddings_post(
+                {"input": "hello", "model": "global:bge-m3"})
+        request.assert_not_called()
+        self.assertEqual(self.handler.sent[0], 409)
+
+    def test_embedding_success_records_kind(self):
+        raw = {"code": 0, "model": "bge-m3",
+               "data": [{"embedding": [0.1]}],
+               "usage": {"prompt_tokens": 3, "total_tokens": 3}}
+        with mock.patch.object(wb_embeddings, "request", return_value=raw), \
+                mock.patch.object(P, "record_usage") as usage:
+            self.handler._handle_embeddings_post({"input": "hello"})
+        self.assertEqual(usage.call_args.kwargs["kind"], "embedding")
+        self.assertEqual(usage.call_args.args[1],
+                         {"prompt_tokens": 3, "total_tokens": 3})
+
+    def test_malformed_response_is_not_success(self):
+        raw = {"code": 0, "data": "not-a-list"}
+        second = FakeAccount("acc-2")
+        P.POOL = FakePool([self.account, second])
+        with mock.patch.object(wb_embeddings, "request", return_value=raw), \
+                mock.patch.object(P, "record_error") as error, \
+                mock.patch.object(P, "record_usage") as usage:
+            self.handler._handle_embeddings_post({"input": "hello"})
+        self.assertEqual(self.handler.sent[0], 502)
+        usage.assert_not_called()
+        self.assertEqual(error.call_args.kwargs["kind"], "embedding")
+
+    def test_account_restricted_stops_rotation(self):
+        second = FakeAccount("acc-2")
+        P.POOL = FakePool([self.account, second])
+        calls = []
+
+        def boom(account, model, inputs, timeout=None):
+            calls.append(account.uid)
+            raise wb_embeddings.EmbeddingError(
+                "account_restricted", "code 11140", 403)
+
+        with mock.patch.object(wb_embeddings, "request", side_effect=boom), \
+                mock.patch.object(P, "_persist_restriction"), \
+                mock.patch.object(P, "note_account_restriction"), \
+                mock.patch.object(P, "record_error"):
+            self.handler._handle_embeddings_post({"input": "hello"})
+        self.assertEqual(calls, ["acc-1"])
+        self.assertEqual(self.handler.sent[0], 403)
 
 
 if __name__ == "__main__":

@@ -274,6 +274,16 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "model_not_found")
         self.assertEqual(ctx.exception.status, 404)
 
+    def test_account_restricted_403(self):
+        error = urllib.error.HTTPError(
+            "https://upstream.test/v2/embeddings", 403, "Forbidden", {},
+            io.BytesIO(b'{"code":11140,"msg":"account abnormal"}'))
+        with PatchUrlopen(error=error):
+            with self.assertRaises(wb_embeddings.EmbeddingError) as ctx:
+                wb_embeddings.request(FakeAccount(), "bge-m3", ["x"])
+        self.assertEqual(ctx.exception.code, "account_restricted")
+        self.assertEqual(ctx.exception.status, 403)
+
     def test_connection_failure(self):
         with PatchUrlopen(error=OSError("connection reset")):
             with self.assertRaises(wb_embeddings.EmbeddingError) as ctx:

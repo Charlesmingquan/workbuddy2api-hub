@@ -367,9 +367,9 @@ MCP_INSTRUCTIONS = """\
 1. 先用 list_generation_models 看当前区有哪些模型、各自约束与实测单价。
 2. generate_image / edit_image 是同步调用，一次约 5.7 积分/张，返回 COS 签名 URL
    （约 24 小时失效），要长期保留请及时下载；需要二进制就传 response_format=b64_json。
-3. generate_video 默认阻塞到出片（可能几十秒到几分钟，一条 5 秒视频约 57~129 积分）。
-   想要异步就传 wait=false，再用 get_video_task 轮询。
-4. 模型名可以带 cn: / global: 前缀指定出口；不带则用面板配置的默认出口。
+3. generate_video 默认立即返回任务号（202），再用 get_video_task 轮询；传 wait=true
+   才阻塞到出片（可能几十秒到几分钟，一条 5 秒视频约 57~129 积分）。
+4. 模型名使用该出口的上游真实 id；出口由 API Key 绑定或面板默认出口决定。
 5. strip_watermark 是**本地后处理**，不消耗上游积分，但要求画面底部本来就有一条
    纯白留白（生图常见的水印区）。没有留白会回 422 并给出实测数字，这时先用
    edit_image 把画面下方约 1/3 涂成纯白，再来裁。
@@ -1006,7 +1006,7 @@ def media_account_by_uid(uid):
 
 
 #: 参考视频/音频里允许自动上传的素材上限（与图片同一档）
-def resolve_reference_uploads(body, realm, model_id, account=None):
+def resolve_reference_uploads(body, realm, model_id, account=None, allowed=None):
     """把 `body` 里参考视频/音频的 data URL 换成**上游抓得到**的 download_url。
 
     为什么必须换：上游对 `video_url` 是**真去下载的**。data URL 与本地路径都抓不到，
@@ -1024,7 +1024,8 @@ def resolve_reference_uploads(body, realm, model_id, account=None):
     if not pending:
         return body
     if account is None:
-        account = _pick_media_account_for(realm, model_id, 0, set())
+        account = _pick_media_account_for(
+            realm, model_id, 0, set(), allowed=allowed)
     for kind, inner, label in pending:
         resolved = []
         for entry in body.get(kind) or ():
@@ -1045,7 +1046,7 @@ def resolve_reference_uploads(body, realm, model_id, account=None):
     return body
 
 
-def _pick_media_account_for(realm, model_id, cost_hint, excluded):
+def _pick_media_account_for(realm, model_id, cost_hint, excluded, allowed=None):
     """选账号的**模块级**实现（后台提交线程也能用）。
 
     `Handler._pick_media_account` 只是薄薄一层：它把 self 上的 Key 白名单/钉账号
@@ -1068,6 +1069,9 @@ def _pick_media_account_for(realm, model_id, cost_hint, excluded):
                 raise wb_media.MediaError("AUTH", str(exc))
             except wb_pool_text.PoolBoundaryBlocked as exc:
                 raise wb_media.MediaError("NO_ROUTE", str(exc))
+        if allowed is not None and pinned.uid not in allowed:
+            raise wb_media.MediaError(
+                "AUTH", "钉住的账号不在本 Key 的绑定范围内")
         if pinned.realm != realm:
             raise wb_media.MediaError(
                 "INVALID_ARGS", "钉住的账号属于 %s 出口，媒体只走 %s" % (pinned.realm, realm))
@@ -1080,7 +1084,7 @@ def _pick_media_account_for(realm, model_id, cost_hint, excluded):
         return pinned
     _, medias = _ensure_pools()
     account = (medias.pick(realm=realm, exclude=excluded or set(),
-                           model=model_id)
+                           model=model_id, allowed=allowed)
                if medias is not None else None)
     if account is None:
         return None
@@ -1185,6 +1189,17 @@ def submit_queued_video_task(task):
     # 先把正在跑任务的账号排掉：并行任务摊到不同账号上，别在同一个账号上叠风控。
     excluded = set(store.busy_accounts() or ())
 
+    key_id = task.get("key") or ""
+    if key_id:
+        entry = next((item for item in configured_keys()
+                      if item.get("id") == key_id), None)
+        # A queued task whose key was deleted must not fall back to the whole
+        # pool: that would spend from accounts the key never owned.
+        allowed = (wb_settings.key_allowed_accounts(entry)
+                   if entry is not None else set())
+    else:
+        allowed = None
+
     def pick(avoid):
         try:
             cost_hint = media_cost_hint(
@@ -1194,7 +1209,8 @@ def submit_queued_video_task(task):
                 audio=task.get("enable_audio") is not False)
         except Exception:
             cost_hint = 0
-        return _pick_media_account_for(realm, model_id, cost_hint, avoid)
+        return _pick_media_account_for(
+            realm, model_id, cost_hint, avoid, allowed=allowed)
 
     account = pick(excluded)
     if account is None:
@@ -2013,6 +2029,8 @@ def record_usage(model, usage, stream=None, elapsed_ms=None, ttft_ms=None, gen_m
     # table existed has no reference and falls back to the timeline.
     if kind == "web":
         row["cost_policy"] = "web"
+    elif kind == "embedding":
+        row["cost_policy"] = "embedding"
     elif kind != "chat":
         # 媒体模型不在 chat 价目表里，current_policy_id() 会给一个 chat 的默认策略，
         # 那会让「按价目表统计」把媒体请求算进某个 chat 策略的样本里。
@@ -2204,6 +2222,8 @@ def record_error(model, status, message, elapsed_ms=None, account=None,
     row["key"] = key or ""
     if kind == "web":
         row["cost_policy"] = "web"
+    elif kind == "embedding":
+        row["cost_policy"] = "embedding"
     elif kind != "chat":
         row["cost_policy"] = (
             "media" if kind in ("image", "video") else "audio")
@@ -26021,14 +26041,40 @@ class Handler(BaseHTTPRequestHandler):
             payload["image"] = image
         return payload
 
+    def _mcp_billable_media_call(self, fn, *args):
+        """Run one MCP media tool under the same key limits as REST.
+
+        `/mcp` is dispatched before the generic POST path, so it would otherwise
+        bypass both the key's cumulative credit quota and its concurrency slot.
+        Only billable tools go through here; listing models, polling a task and
+        local watermark stripping do not occupy a key slot.
+        """
+        hit, used, limit = key_credit_exhausted(self.key_entry, self._key_id())
+        if hit:
+            name = (self.key_entry or {}).get("name") or self._key_id() or "current key"
+            raise wb_mcp.ToolError(
+                "Credit quota exhausted for API key '%s' (%.2f of %g credits used); "
+                "raise the limit for this key in the panel to continue"
+                % (name, used, limit))
+        ok, current, maximum = _acquire_key_slot(self.key_entry)
+        if not ok:
+            name = (self.key_entry or {}).get("name") or self._key_id() or "current key"
+            raise wb_mcp.ToolError(
+                "Rate limit reached: API key '%s' reached its concurrency limit "
+                "(%d in flight); retry shortly" % (name, maximum))
+        try:
+            return self._capture_call(fn, *args)
+        finally:
+            _release_key_slot(self.key_entry)
+
     def _mcp_generate_image(self, arguments):
         payload = self._mcp_image_payload(arguments, edit=False)
-        return self._capture_call(
+        return self._mcp_billable_media_call(
             self._handle_media_post, "/v1/images/generations", payload)
 
     def _mcp_edit_image(self, arguments):
         payload = self._mcp_image_payload(arguments, edit=True)
-        return self._capture_call(
+        return self._mcp_billable_media_call(
             self._handle_media_post, "/v1/images/edits", payload)
 
     def _mcp_generate_video(self, arguments):
@@ -26042,7 +26088,7 @@ class Handler(BaseHTTPRequestHandler):
             value = arguments.get(key)
             if value is not None:
                 payload[key] = value
-        status, body = self._capture_call(
+        status, body = self._mcp_billable_media_call(
             self._handle_media_post, "/v1/videos", payload)
         if status >= 400 or arguments.get("wait") is not True:
             return status, body
@@ -26198,6 +26244,12 @@ class Handler(BaseHTTPRequestHandler):
         model, realm_hint = wb_embeddings.strip_realm_prefix(model)
         if not model:
             return self._error(400, "model 不能为空", "invalid_request_error")
+        # Embedding ids live in a separate registry, but the operator's key
+        # allow-list is still an authorization boundary. A key restricted to
+        # chat models must not silently gain bge-m3 access through this route.
+        blocked = self._key_model_error(model)
+        if blocked:
+            return self._error(400, blocked, "invalid_request_error")
         try:
             inputs = wb_embeddings.normalize_input(payload.get("input"))
         except wb_embeddings.EmbeddingError as exc:
@@ -26206,26 +26258,49 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(
                 400, "一次最多 %d 条 input（给了 %d 条）"
                 % (config["max_inputs"], len(inputs)), "invalid_request_error")
-        realm = realm_hint
-        if realm is None:
-            # 与媒体同一套优先级：Key 绑定的出口 > 面板默认出口。嵌入没有
-            # `settings.embeddings.realm`——那个开关只决定开不开，出口跟着全局走，
-            # 否则会出现「聊天在 intl、嵌入偷偷在 cn」这种难查的错位。
-            realm = self._key_realm() or CURRENT_REALM
+        bound = self._key_realm()
+        if bound and realm_hint and realm_hint != bound:
+            return self._error(
+                409,
+                "model 前缀要求 %s 出口，但当前 API Key 绑定的是 %s 出口"
+                % (realm_hint, bound),
+                "invalid_request_error")
+        # 与媒体同一套优先级：Key 绑定的出口 > model 前缀 > 面板默认出口。
+        realm = bound or realm_hint or CURRENT_REALM
         excluded = set()
         tried = 0
         last = None
+        started = time.time()
         while tried < EMBEDDINGS_ROTATE_MAX:
-            account = self._pick_embedding_account(realm, excluded)
-            if account is None:
-                if last is not None:
-                    break
-                return self._error(
-                    503, "no available account for realm %s" % realm, "server_error")
+            try:
+                account = self._pick_embedding_account(realm, model, excluded)
+            except wb_embeddings.EmbeddingError as exc:
+                return self._embeddings_error(exc)
+            slot_ok = account_slot_acquire(account)
+            if not slot_ok:
+                excluded.add(account.uid)
+                tried += 1
+                continue
             try:
                 raw = wb_embeddings.request(account, model, inputs)
             except wb_embeddings.EmbeddingError as exc:
                 last = exc
+                if exc.code == "account_restricted":
+                    try:
+                        account.note_restricted(detail=exc.message)
+                    except Exception:
+                        pass
+                    try:
+                        _persist_restriction(account)
+                        note_account_restriction(realm, account.uid)
+                    except Exception:
+                        pass
+                    record_error(
+                        model, exc.status, exc.message,
+                        elapsed_ms=(time.time() - started) * 1000.0,
+                        account=account.uid, realm=realm,
+                        key=self._key_id(), kind="embedding")
+                    return self._embeddings_error(exc)
                 if exc.code in ("model_not_found", "invalid_request"):
                     # 与账号无关：换号只会把同一个错误重放一遍，还白烧一次请求。
                     break
@@ -26238,29 +26313,101 @@ class Handler(BaseHTTPRequestHandler):
                 excluded.add(getattr(account, "uid", ""))
                 tried += 1
                 continue
+            finally:
+                account_slot_release(account)
+            try:
+                result = wb_embeddings.parse_response(raw, len(inputs))
+            except Exception:
+                result = None
+            if result is None:
+                exc = wb_embeddings.EmbeddingError(
+                    "upstream_error", "上游响应格式不正确", 502)
+                record_error(
+                    model, exc.status, exc.message,
+                    elapsed_ms=(time.time() - started) * 1000.0,
+                    account=account.uid, realm=realm,
+                    key=self._key_id(), kind="embedding")
+                return self._embeddings_error(exc)
             try:
                 account.note_success(model=model)
             except Exception:
                 pass
-            try:
-                return self._json(200, wb_embeddings.parse_response(raw, len(inputs)))
-            except wb_embeddings.EmbeddingError as exc:
-                return self._error(exc.status, exc.message, "server_error")
+            usage = raw.get("usage") if isinstance(raw, dict) else None
+            record_usage(
+                model, usage if isinstance(usage, dict) else {},
+                stream=False,
+                elapsed_ms=(time.time() - started) * 1000.0,
+                account=account.uid, outcome="completed",
+                key=self._key_id(), realm=realm, kind="embedding")
+            return self._json(200, result)
         if last is None:
             return self._error(503, "no available account", "server_error")
-        return self._error(last.status, last.message,
-                           "rate_limit_error" if last.status == 429 else "server_error")
+        record_error(
+            model, last.status, last.message,
+            elapsed_ms=(time.time() - started) * 1000.0,
+            realm=realm, key=self._key_id(), kind="embedding")
+        return self._embeddings_error(last)
 
-    def _pick_embedding_account(self, realm, excluded):
-        """挑一个可用的号。嵌入不吃媒体那套并发槽，只需要过账号级守卫。"""
-        try:
-            return POOL.pick(realm=realm, exclude=excluded or None)
-        except Exception:
-            pass
-        try:
-            return POOL.pick()
-        except Exception:
-            return None
+    def _embeddings_error(self, exc):
+        return self._json(exc.status, {
+            "error": {
+                "message": exc.message,
+                "type": ("rate_limit_error" if exc.status == 429
+                         else "invalid_request_error" if exc.status < 500
+                         else "server_error"),
+                "code": exc.code,
+            }
+        })
+
+    def _pick_embedding_account(self, realm, model_id, excluded):
+        """Pick a text-pool account under the same guards as chat/audio."""
+        apply_daily_guards()
+        apply_reserve_credits()
+        hold = restriction_hold_remaining(realm)
+        if hold > 0:
+            raise wb_embeddings.EmbeddingError(
+                "restriction_hold",
+                "上游账号级限制生效中（整池暂停），%d 秒后再试" % (int(hold) + 1),
+                429)
+        allowed = self._key_allowed_accounts()
+        texts, _ = _ensure_pools()
+        if texts is None:
+            raise wb_embeddings.EmbeddingError(
+                "pool_unavailable", "account pool is not ready", 503)
+        pinned = pinned_account()
+        if pinned is not None:
+            try:
+                texts.require(pinned)
+            except wb_pool_scope.ScopeViolation as exc:
+                raise wb_embeddings.EmbeddingError("pool_boundary", str(exc), 403)
+            except wb_pool_text.PoolBoundaryBlocked as exc:
+                raise wb_embeddings.EmbeddingError("pool_boundary", str(exc), 503)
+            if allowed is not None and pinned.uid not in allowed:
+                raise wb_embeddings.EmbeddingError(
+                    "account_not_allowed",
+                    "the pinned account is not allowed by this API key",
+                    403)
+            if pinned.realm != realm:
+                raise wb_embeddings.EmbeddingError(
+                    "realm_mismatch",
+                    "the pinned account belongs to a different realm",
+                    409)
+            if not pinned.ready(model=model_id):
+                raise wb_embeddings.EmbeddingError(
+                    "account_unavailable",
+                    "the pinned account is unavailable: %s"
+                    % pinned.unavailable_reason(model=model_id),
+                    503)
+            return pinned
+        account = texts.pick(realm=realm, exclude=excluded, model=model_id,
+                             allowed=allowed)
+        if account is None:
+            raise wb_embeddings.EmbeddingError(
+                "no_usable_account",
+                "no usable account for embeddings; " + texts.empty_detail(realm)
+                + pool_unavailable_detail(realm, model_id, allowed),
+                503)
+        return account
 
     # ------------------------------------------------------------ 媒体（生图 / 生视频）
 
@@ -26619,6 +26766,7 @@ class Handler(BaseHTTPRequestHandler):
         models = self._media_catalog(realm)
         tag = (wb_media.TAG_IMAGE_TO_IMAGE if kind == "edit"
                else wb_media.TAG_TEXT_TO_IMAGE)
+        models = self._media_models_allowed(models)
         model = wb_media.pick_model(models, payload.get("model"), tag)
         size = wb_media.check_size(payload.get("size"))
         count = payload.get("n")
@@ -26657,6 +26805,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _media_catalog(self, realm):
         """该区的媒体模型清单：内存 → 留档副本 → 现拉一次。"""
+        allowed = self._key_allowed_accounts()
         payload = _catalog_raw.get(realm)
         if payload is None:
             payload = read_catalog_dump(realm)
@@ -26664,7 +26813,8 @@ class Handler(BaseHTTPRequestHandler):
                 _catalog_raw[realm] = payload
         if payload is None:
             texts, medias = _ensure_pools()
-            account = (medias.pick(realm=realm) if medias is not None
+            account = (medias.pick(realm=realm, allowed=allowed)
+                       if medias is not None
                        else representative_account(
                            realm=realm, scope=wb_pool_scope.SCOPE_MEDIA))
             if account is None:
@@ -26682,6 +26832,18 @@ class Handler(BaseHTTPRequestHandler):
                 "NO_MEDIA_MODEL",
                 "该区目录里没有任何媒体模型（该账号可能没有生图权限）")
         return models
+
+    def _media_models_allowed(self, models):
+        """Hide media models this API key is not allowed to call."""
+        allowed = []
+        for model in models:
+            if not self._key_model_error(model.get("id")):
+                allowed.append(model)
+        if not allowed:
+            raise wb_media.MediaError(
+                "NO_MEDIA_MODEL",
+                "当前 API Key 的模型白名单不包含任何该出口的媒体模型")
+        return allowed
 
     def _pick_media_account(self, realm, model_id, cost_hint, excluded):
         """挑一个账号跑这次媒体请求：四道闸门全过才派发。
@@ -26913,7 +27075,8 @@ class Handler(BaseHTTPRequestHandler):
                                or ref_images)
             tag = (wb_media.TAG_IMAGE_TO_VIDEO if wants_image
                    else wb_media.TAG_TEXT_TO_VIDEO)
-            model = wb_media.pick_model(models, payload.get("model"), tag)
+            model = wb_media.pick_model(
+                self._media_models_allowed(models), payload.get("model"), tag)
             # **先只校验、不下载**：数量上限与首尾帧互斥只用字段本身就能判断。
             # 放在下载之前有两层理由——拒得早（客户端改一行参数就能重试），
             # 也免得别人拿十个坏地址让我们白下载一轮。
@@ -26980,7 +27143,9 @@ class Handler(BaseHTTPRequestHandler):
             # 在这里换成"先上传拿 download_url"。放在建 body 之后、排队之前，
             # 是为了让**排队路径**存进任务表的也是已经可抓的地址——否则排到半夜
             # 才提交时上游照样 2013，而且那时候调用方早已拿到 202、以为成了。
-            body = resolve_reference_uploads(body, realm, model["id"])
+            body = resolve_reference_uploads(
+                body, realm, model["id"],
+                allowed=self._key_allowed_accounts())
             cost_hint = media_cost_hint(
                 model["id"], params["seconds"], params.get("resolution"),
                 with_reference=bool(body.get("reference_images")
@@ -27211,6 +27376,7 @@ class Handler(BaseHTTPRequestHandler):
         tag = (query.get("tag") or [None])[0]
         try:
             models = self._media_catalog(realm)
+            models = self._media_models_allowed(models)
         except wb_media.MediaError as exc:
             return self._media_error(exc)
         if tag:

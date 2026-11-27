@@ -10004,7 +10004,8 @@ html:not([data-ui="next"]) .settings-cat-bar{
         <button onclick="saveEmbeddingsConfig(this)" style="height:38px;margin-top:20px">保存</button>
       </div>
       <div style="font-size:12px;color:var(--dim);margin-top:10px">
-        请求里的 model 可以带 <code>cn:</code> / <code>global:</code> 前缀强制走某个出口，前缀不会发给上游。
+        请求里的 model 可以带 <code>cn:</code> / <code>global:</code> 前缀指定出口，前缀不会发给上游；
+        若该 Key 已绑定另一个出口，网关会直接回 409，不会偷偷跨区调用。
         单次最多条数是本地闸门，超了直接 400，不去撞上游。
       </div>
     </section>
@@ -20629,7 +20630,7 @@ const MCP_TOOLS_DOC = [
   { name: 'edit_image', required: 'prompt, image',
     note: '改图。image 可以是 URL 或 data URL，也可以传数组一次改多张。' },
   { name: 'generate_video', required: 'prompt',
-    note: '生视频。默认阻塞到出结果；wait=false 立即拿任务号，再用 get_video_task 查。' },
+    note: '生视频。默认立即返回任务号；wait=true 阻塞到出结果，或稍后用 get_video_task 查。' },
   { name: 'get_video_task', required: 'task_id',
     note: '查异步视频任务的进度、失败原因与产物地址。' },
   { name: 'strip_watermark', required: 'image',

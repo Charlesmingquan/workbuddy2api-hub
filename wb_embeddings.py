@@ -18,6 +18,7 @@ Two upstream quirks drive the shape of this module:
 
 import json
 import urllib.error
+import urllib.request
 
 import wb_accounts
 
@@ -56,6 +57,16 @@ class EmbeddingError(Exception):
         self.message = message
         self.status = status
         self.retry_after = retry_after
+
+
+def _account_restricted(detail):
+    """True for the upstream account-ban envelope (HTTP 403 / code 11140)."""
+    text = str(detail or "")
+    lowered = text.lower()
+    return ("11140" in text
+            or ("account" in lowered and any(
+                marker in lowered for marker in
+                ("restricted", "banned", "suspended", "abnormal"))))
 
 
 def normalize_input(raw):
@@ -131,6 +142,11 @@ def encode_body(body):
 
 def _reject(detail, code=None):
     """Map an upstream envelope failure onto an EmbeddingError."""
+    if _account_restricted(detail):
+        return EmbeddingError(
+            "account_restricted",
+            "上游账号级限制：%s" % (detail or "HTTP 403"),
+            403)
     if code == CODE_MODEL_NOT_FOUND:
         return EmbeddingError(
             "model_not_found",
@@ -252,6 +268,11 @@ def request(account, model, inputs, timeout=None):
                     detail = parsed["msg"]
         except Exception:
             pass
+        if exc.code == 403 and _account_restricted(detail):
+            raise EmbeddingError(
+                "account_restricted",
+                "上游账号级限制：%s" % (detail or "HTTP 403"),
+                403)
         raise _reject(detail or ("HTTP %d" % exc.code), code)
     except Exception as exc:
         raise EmbeddingError(
