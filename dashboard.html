@@ -6513,14 +6513,52 @@ html[data-ui="next"] #pageGateway #modelsTable .catalog-model-row td[data-label=
     align-items:flex-start;
     flex-direction:column;
   }
-  html[data-ui="next"] #pageGateway .next-source-badge{
+  html[data-ui="next"] #pageGateway #gatewayModelsSection > div:first-child > h2{
+    width:100%;
     max-width:100%;
+    min-width:0;
   }
-  html[data-ui="next"] #pageGateway .next-source-badge > b{
-    max-width:160px;
+  html[data-ui="next"] #pageGateway .next-source-badge{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:2px 6px;
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+    border-radius:10px;
+    padding:5px 9px;
+  }
+  html[data-ui="next"] #pageGateway .next-source-badge > b,
+  html[data-ui="next"] #pageGateway .next-source-badge > span{
+    max-width:100%;
+    white-space:normal;
+    overflow-wrap:anywhere;
   }
   html[data-ui="next"] #pageGateway #modelPickHint{
     white-space:normal;
+  }
+  html[data-ui="next"] #pageGateway #gatewayModelsSection > .next-table-scroll{
+    border:0;
+    border-radius:0;
+    background:transparent;
+    overflow:visible;
+  }
+  html[data-ui="next"] #pageGateway #modelsTable{
+    min-width:0 !important;
+    table-layout:auto;
+  }
+  html[data-ui="next"] #pageGateway #modelsTable tbody td{
+    padding:4px 2px !important;
+    border-bottom:0 !important;
+    font-size:12px;
+    line-height:1.45;
+  }
+  html[data-ui="next"] #pageGateway #modelsTable tbody tr:hover td{
+    background:transparent !important;
+  }
+  html[data-ui="next"] #pageGateway #modelsTable :is(td,th):is(:first-child,:nth-child(2),:nth-child(3),:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(8),:nth-child(9)){
+    width:auto !important;
   }
 }
 
@@ -8722,12 +8760,12 @@ html[data-ui="next"] #pageSettings .next-settings-content > section[data-next-hi
 
 @media (prefers-reduced-motion:no-preference){
   html[data-ui="next"] #pageSettings .next-settings-shell{
-    animation:nextSettingsReveal .32s ease-out both;
+    animation:nextSettingsReveal .28s ease-out;
   }
 
   @keyframes nextSettingsReveal{
-    from{opacity:0;transform:translateY(5px);}
-    to{opacity:1;transform:none;}
+    from{opacity:0;}
+    to{opacity:1;}
   }
 }
 /* === NEXT-UI REFACTOR V2 END === */
@@ -28575,7 +28613,15 @@ if (typeof SORT_DENY_TABLES !== 'undefined' && SORT_DENY_TABLES && SORT_DENY_TAB
       // 面板首个子节点现在是搜索框，不能再按 children[selectedIndex] 取行。
       var rows = panel.querySelectorAll('.cs-opt');
       var cur = rows[sel.selectedIndex];
-      if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+      // 只滚动自绘面板内部 scrollTop，绝不调用 scrollIntoView 以免连带滚动外层窗口。
+      if (cur){
+        var searchBox = panel.querySelector('.cs-search');
+        var sh = searchBox ? searchBox.offsetHeight : 0;
+        var cTop = cur.offsetTop - sh - 4;
+        var cBot = cur.offsetTop + cur.offsetHeight + 4;
+        if (cTop < panel.scrollTop) panel.scrollTop = Math.max(0, cTop);
+        else if (cBot > panel.scrollTop + panel.clientHeight) panel.scrollTop = cBot - panel.clientHeight;
+      }
     }
     if (input) setTimeout(function(){ try { input.focus(); } catch(e){} }, 0);
   }

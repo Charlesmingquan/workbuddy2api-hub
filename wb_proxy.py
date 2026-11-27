@@ -25502,10 +25502,15 @@ class Handler(BaseHTTPRequestHandler):
         if length < 0:
             raise BadJSON()
         try:
-            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            raw_bytes = self.rfile.read(length) if length else b"{}"
             # Mark the body as taken so a later error reply does not try to
             # drain the same bytes again (that read would block forever).
+            # Set this BEFORE decoding UTF-8 / JSON so binary bodies (e.g.
+            # multipart sent to a JSON-only route) fail immediately with 400.
             self._body_consumed = True
+            if length and len(raw_bytes) != length:
+                raise BadJSON()
+            raw = raw_bytes.decode("utf-8")
             data = json.loads(raw or "{}")
         except Exception:
             raise BadJSON()
@@ -25575,15 +25580,35 @@ class Handler(BaseHTTPRequestHandler):
             return None
     # ------------------------------------------------------------ 媒体（生图 / 生视频）
 
-    def _payload_or_error_for_media(self):
+    def _payload_or_error_for_media(self, path=""):
         """媒体路由的体上限：**不小于** 24 MB，也不小于用户配置的通用上限。
 
         只放宽不收紧：改图的输入图是 data URL，8 MB 原图编码后约 10.7 MB，而通用
         上限默认 16 MB、还可能被 `max_payload_mb` 调小——那是给 chat 定的尺子。
+        `/v1/images/edits` 同时兼容 OpenAI 标准 `multipart/form-data` 与 JSON。
         """
         configured = wb_settings.max_payload_mb(ACCOUNTS_DIR)
         generic = configured * 1024 * 1024 if configured is not None else MAX_PAYLOAD_BYTES
         limit = max(generic, MEDIA_MAX_PAYLOAD_BYTES)
+        content_type = self.headers.get("Content-Type") or ""
+        if path in ("/v1/images/edits", "/images/edits") and "multipart/form-data" in content_type.lower():
+            try:
+                raw = self._read_raw_body(limit)
+            except BodyTooLarge as exc:
+                self._reject_body_after_reply = True
+                self._error(413, "payload too large (%d bytes > %d limit)" % (exc.length, limit),
+                            "invalid_request_error")
+                self._drain_rejected_body(exc.length)
+                self.close_connection = True
+                return None
+            except BadJSON:
+                self._error(400, "invalid multipart body", "invalid_request_error")
+                return None
+            try:
+                return wb_media.parse_edit_multipart(raw, content_type)
+            except wb_media.MediaError as exc:
+                self._media_error(exc)
+                return None
         try:
             return self._read_payload(max_bytes=limit, allow_list=False)
         except BodyTooLarge as exc:
@@ -30333,7 +30358,7 @@ class Handler(BaseHTTPRequestHandler):
         elif is_media_route:
             # 改图的输入图是 data URL，8 MB 原图编码后约 10.7 MB；通用上限
             # （默认 16 MB，还可能被 max_payload_mb 调小）会把一次合法请求判成 413。
-            payload = self._payload_or_error_for_media()
+            payload = self._payload_or_error_for_media(path)
         else:
             payload = self._payload_or_error(allow_list=(path == "/accounts/import"))
         if payload is None:
