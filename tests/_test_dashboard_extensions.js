@@ -49,14 +49,28 @@ function run(body, scope, exportName) {
 
 // ---------------------------------------------------------------- 1. 结构
 
-const mediaStart = html.indexOf('id="pageMedia"');
-const mediaEnd = html.indexOf('id="pageAnalytics"');
-assert.ok(mediaStart > 0 && mediaEnd > mediaStart, 'pageMedia 段落应能被定位');
+// 三张能力卡片已下沉到「接入」页（#pageApi）末尾，不再是媒体页里的区块。
+const mediaStart = html.indexOf('id="pageApi"');
+const mediaEnd = html.indexOf('id="pageAgents"');
+assert.ok(mediaStart > 0 && mediaEnd > mediaStart, 'pageApi 段落应能被定位');
 const media = html.slice(mediaStart, mediaEnd);
 
 ['图片去水印', '文本嵌入', 'MCP 服务'].forEach(label => {
-  assert.ok(media.includes(label), label + ' 应落在 pageMedia 里（而不是别处）');
+  assert.ok(media.includes(label), label + ' 应落在 pageApi 里（而不是别处）');
 });
+
+// 接入页四张卡片（模型 Key / 外部 Key / 调用记录 / 接口文档）已改由左侧本页导航
+// 切换：每张都带 data-api-nav 标签，且不再互斥隐藏，顶部 tab 栏隐藏。
+['模型调用 Key', '外部账号接口 Key', '调用记录', '接口文档'].forEach(label => {
+  assert.ok(html.includes('data-api-nav="' + label + '"'),
+    '接入卡片应带导航标签 data-api-nav="' + label + '"');
+});
+['apiPaneKeys', 'apiPaneRecords', 'apiPaneDocs'].forEach(id => {
+  assert.ok(!new RegExp('id="' + id + '"[^>]*\\bhidden\\b').test(html),
+    id + ' 不应互斥隐藏（四张卡片常驻显示）');
+});
+assert.ok(/#pageApi \.api-page-tabs\{display:none!important\}/.test(html),
+  '接入页顶部 tab 栏应隐藏，改由左侧本页导航切换');
 
 [
   'setWatermarkState', 'setWatermarkEnabled', 'setWatermarkMinBlank',
